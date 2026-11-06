@@ -46,16 +46,19 @@ define FeedSourcesAppendOPKG
 endef
 
 # 1: destination file
+# Base of the shared package directories, when they are not below the release (%U/packages)
+FEED_PACKAGES_BASE=$(or $(call qstrip,$(CONFIG_VERSION_REPO_PACKAGES)),%U/packages)
+
 define FeedSourcesAppendAPK
 ( \
   echo '%U/targets/%S/packages/packages.adb'; \
   $(strip $(if $(CONFIG_PER_FEED_REPO), \
-	echo '%U/packages/%A/base/packages.adb'; \
-	$(if $(CONFIG_BUILDBOT), \
+	echo '$(FEED_PACKAGES_BASE)/%A/base/packages.adb'; \
+	$(if $(or $(CONFIG_BUILDBOT),$(CONFIG_ALL_KMODS)), \
 		echo '%U/targets/%S/kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)/packages.adb';) \
 	$(foreach feed,$(FEEDS_AVAILABLE), \
 		$(if $(CONFIG_FEED_$(feed)), \
-			echo '$(if $(filter m,$(CONFIG_FEED_$(feed))),# )%U/packages/%A/$(feed)/packages.adb';)))) \
+			echo '$(if $(filter m,$(CONFIG_FEED_$(feed))),# )$(FEED_PACKAGES_BASE)/%A/$(feed)/packages.adb';)))) \
 ) >> $(1)
 endef
 

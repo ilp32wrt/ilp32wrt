@@ -195,6 +195,21 @@ if VERSIONOPT
 			repository version of the source, e.g. the number of commits
 			since a branch point or a short Git commit ID.
 
+	config VERSION_REPO_PACKAGES
+		string
+		prompt "Shared package repository"
+		default ""
+		help
+			Base address of the package directories shared by the releases of a
+			branch. Empty: <Release repository>/packages.
+
+	config VERSION_APK_NO_BUILD_KEY
+		bool
+		prompt "No per-build apk key in the image"
+		default n
+		help
+			The image trusts only the keys given in files/etc/apk/keys.
+
 	config VERSION_REPO
 		string
 		prompt "Release repository"

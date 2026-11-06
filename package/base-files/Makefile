@@ -121,7 +121,7 @@ endef
 Build/Compile = $(Build/Compile/Default)
 
 ifneq ($(CONFIG_USE_APK),)
-ifndef CONFIG_BUILDBOT
+ifeq ($(CONFIG_BUILDBOT)$(CONFIG_VERSION_APK_NO_BUILD_KEY),)
   define Package/base-files/install-key
 	mkdir -p $(1)/etc/apk/keys
 	$(CP) $(BUILD_KEY_APK_PUB) $(1)/etc/apk/keys/
