@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build an ILP32Wrt release for one target from a checked-out ilp32wrt tree: feeds as pinned by
-# the tree, toolchain from scratch, release/<target>.config, version strings, no package feed. Collects
+# the tree, toolchain from scratch, release/<target>.config, version strings, the fixed apk key. Collects
 # the release files (and for armsr-armv8 the test programs for the QEMU checks), and checks the public files
 # for build host details. Used by the release workflow of ilp32wrt and on a local machine.
 #
@@ -82,9 +82,9 @@ while read -r line; do
 done < <(grep -E '^CONFIG_|^# CONFIG_.* is not set' "$SEED"; echo "CONFIG_VERSION_NUMBER=\"$VERSION\""; echo "CONFIG_VERSION_CODE=\"$CODE\"")
 [ $missing = 0 ] || exit 1
 
-# no package feed: the apk feed list only explains that (the default points to downloads.openwrt.org)
-mkdir -p files/etc/apk/repositories.d
-cat > files/etc/apk/repositories.d/distfeeds.list <<EOF
+# the image trusts only the fixed key of the ILP32Wrt package repository
+mkdir -p files/etc/apk/keys
+cp "$HERE/release/keys/ilp32wrt-apk.pem" files/etc/apk/keys/
 # ILP32Wrt has no package feed: the official OpenWrt packages are not built for ILP32
 # (aarch64_*_ilp32). Build packages from source: https://github.com/ilp32-a64/ilp32wrt
 EOF
