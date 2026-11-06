@@ -46,6 +46,10 @@ CONFIGURE_ARGS += \
 	--enable-static \
 	--without-readline \
 	--disable-fft \
+# no ILP32 assembly in GMP: its configure takes aarch64 ABI 32 for 32-bit Arm code
+ifdef CONFIG_AARCH64_ABI_ILP32
+  CONFIGURE_ARGS += --disable-assembly
+endif
 
 define Build/Compile
 	$(call Build/Compile/Default, \
