@@ -94,9 +94,10 @@ make clean > /dev/null
 log "download"
 make -j"$JOBS" download > "$OUT/download.log" 2>&1 || make -j1 download V=s >> "$OUT/download.log" 2>&1
 log "build (-j$JOBS)"
-if ! make -j"$JOBS" > "$OUT/build.log" 2>&1; then
+# IGNORE_ERRORS=1: with CONFIG_ALL_KMODS a failing package must not stop the build; a package an image needs stops it in the image step
+if ! make -j"$JOBS" IGNORE_ERRORS=1 > "$OUT/build.log" 2>&1; then
 	log "build failed, again with -j1 V=s for the log"
-	make -j1 V=s > "$OUT/build-failed.log" 2>&1 || true
+	make -j1 V=s IGNORE_ERRORS=1 > "$OUT/build-failed.log" 2>&1 || true
 	tail -60 "$OUT/build-failed.log"; exit 1
 fi
 
