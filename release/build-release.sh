@@ -85,9 +85,6 @@ done < <(grep -E '^CONFIG_|^# CONFIG_.* is not set' "$SEED"; echo "CONFIG_VERSIO
 # the image trusts only the fixed key of the ILP32Wrt package repository
 mkdir -p files/etc/apk/keys
 cp "$HERE/release/keys/ilp32wrt-apk.pem" files/etc/apk/keys/
-# ILP32Wrt has no package feed: the official OpenWrt packages are not built for ILP32
-# (aarch64_*_ilp32). Build packages from source: https://github.com/ilp32-a64/ilp32wrt
-EOF
 
 # the version strings and the kernel build user/host do not make OpenWrt rebuild what an earlier build of the
 # tree left: start from clean target directories (the toolchain stays; on a CI runner the tree is new anyway)
