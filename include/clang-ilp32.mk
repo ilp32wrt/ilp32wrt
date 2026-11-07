@@ -37,6 +37,9 @@ ifeq ($(CLANG_ILP32_USE),y)
   # -Werror turns into errors: move them to LDFLAGS
   CLANG_ILP32_WL := $(filter -Wl$(comma)%,$(TARGET_CFLAGS))
   TARGET_CFLAGS := $(filter-out -Wl$(comma)%,$(TARGET_CFLAGS)) -Qunused-arguments
+  # clang warns about sign comparisons inside musl's CMSG_NXTHDR (GCC does not, it comes from a system
+  # header), and -Werror in packages such as ucode turns that into an error
+  TARGET_CFLAGS += -Wno-error=sign-compare
   # GCC's -z<keyword> linker shorthand (-znow, -zrelro, -zmax-page-size=...) is unknown to clang
   TARGET_LDFLAGS := $(patsubst -z%,-Wl$(comma)-z$(comma)%,$(TARGET_LDFLAGS))
   TARGET_LDFLAGS += $(filter-out $(TARGET_LDFLAGS),$(CLANG_ILP32_WL))
