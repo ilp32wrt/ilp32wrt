@@ -1,5 +1,5 @@
-src-git packages https://github.com/ilp32-a64/ilp32wrt-packages.git^cbe0a8ff97f75e0361eda671d6cfac76c1f952b7
-src-git luci https://git.openwrt.org/project/luci.git^75a306df84a020c57a631ef5b4c02ace56d93387
+src-git packages https://github.com/ilp32-a64/ilp32wrt-packages.git^799c73d99ef0fe6eaed7c71ffa6138cc5332a4d4
+src-git luci https://github.com/ilp32-a64/ilp32wrt-luci.git^9b62b2371041840e7f4de2f54152b385b362f4d4
 src-git routing https://git.openwrt.org/feed/routing.git^48c808034414a2112cf9d5261a20a320e8d0d170
 src-git telephony https://git.openwrt.org/feed/telephony.git^2618106d5846a4a542fdf5809f0d3ed228ce439b
 src-git video https://github.com/openwrt/video.git^094bf58da6682f895255a35a84349a79dab4bf95
