@@ -88,7 +88,8 @@ define Package/libwolfsslcpu-crypto
 $(call Package/libwolfssl/Default)
   TITLE:=wolfSSL library with AES CPU instructions
   PROVIDES:=libwolfssl libcyassl
-  DEPENDS:=@((aarch64||x86_64)&&(m||!TARGET_bcm27xx))
+  # its ARMv8 assembly takes 64-bit pointers: not on AArch64 ILP32
+  DEPENDS:=@((aarch64||x86_64)&&(m||!TARGET_bcm27xx)&&!AARCH64_ABI_ILP32)
   ABI_VERSION:=$(PKG_ABI_VERSION)
   VARIANT:=cpu-crypto
 endef
