@@ -1,0 +1,47 @@
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Subject: jail: seccomp architecture of AArch64 ILP32
+
+AArch64 ILP32 tasks report AUDIT_ARCH_AARCH64ILP32 (0xd00000b7) in seccomp_data.arch
+on the ILP32 kernel, not AUDIT_ARCH_AARCH64. procd built for ILP32 checked for
+AUDIT_ARCH_AARCH64 and killed every task under a seccomp policy (umdns,
+transmission-daemon). Use the ILP32 value when built for ILP32 (defined here when the
+uapi headers lack it), and accept SCMP_ARCH_AARCH64ILP32 in OCI profiles.
+
+The syscall names already come from the ILP32 toolchain, so the numbers match.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+diff --git a/jail/seccomp-bpf.h b/jail/seccomp-bpf.h
+index e6384db..c785040 100644
+--- a/jail/seccomp-bpf.h
++++ b/jail/seccomp-bpf.h
+@@ -64,7 +64,15 @@ struct seccomp_data {
+ #define arch_nr (offsetof(struct seccomp_data, arch))
+ #define syscall_arg(x) (offsetof(struct seccomp_data, args[x]))
+ 
+-#if defined(__aarch64__)
++#ifndef AUDIT_ARCH_AARCH64ILP32
++/* AArch64 ILP32 tasks: EM_AARCH64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE | 0x10000000 */
++# define AUDIT_ARCH_AARCH64ILP32	0xd00000b7U
++#endif
++
++#if defined(__aarch64__) && defined(__ILP32__)
++# define REG_SYSCALL	regs.regs[8]
++# define ARCH_NR	AUDIT_ARCH_AARCH64ILP32
++#elif defined(__aarch64__)
+ # define REG_SYSCALL	regs.regs[8]
+ # define ARCH_NR	AUDIT_ARCH_AARCH64
+ #elif defined(__amd64__)
+diff --git a/jail/seccomp-oci.c b/jail/seccomp-oci.c
+index c279fc1..927ec33 100644
+--- a/jail/seccomp-oci.c
++++ b/jail/seccomp-oci.c
+@@ -119,6 +119,8 @@ static uint32_t resolve_architecture(char *archname)
+ 		return AUDIT_ARCH_ARM;
+ 	else if (!strcmp(archname, "SCMP_ARCH_AARCH64"))
+ 		return AUDIT_ARCH_AARCH64;
++	else if (!strcmp(archname, "SCMP_ARCH_AARCH64ILP32"))
++		return AUDIT_ARCH_AARCH64ILP32;
+ 	else if (!strcmp(archname, "SCMP_ARCH_LOONGARCH64"))
+ 		return AUDIT_ARCH_LOONGARCH64;
+ 	else if (!strcmp(archname, "SCMP_ARCH_MIPS"))
