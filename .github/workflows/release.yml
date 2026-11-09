@@ -15,11 +15,11 @@ on:
         description: "Version, e.g. 25.12.6-ilp32.1 (tag v<version>)"
         required: true
         type: string
-      test_ref:
-        description: "test-ilp32 commit with build-release.sh and the QEMU tests (full SHA)"
+      tests_ref:
+        description: "ilp32wrt/tests commit with the QEMU tests (full SHA)"
         required: true
         type: string
-        default: "7c0f3f0737ccbde0cd9cd4c606d36c813a550526"
+        default: "47e795e1e53d1db0cf5fc491f6aa04967c2ce92f"
 
 permissions:
   contents: read
@@ -45,10 +45,10 @@ jobs:
         env:
           COMMIT: ${{ inputs.commit }}
           VERSION: ${{ inputs.version }}
-          TEST_REF: ${{ inputs.test_ref }}
+          TESTS_REF: ${{ inputs.tests_ref }}
         run: |
           echo "$COMMIT" | grep -qxE '[0-9a-f]{40}' || { echo "commit must be a full SHA"; exit 1; }
-          echo "$TEST_REF" | grep -qxE '[0-9a-f]{40}' || { echo "test_ref must be a full SHA"; exit 1; }
+          echo "$TESTS_REF" | grep -qxE '[0-9a-f]{40}' || { echo "tests_ref must be a full SHA"; exit 1; }
           echo "$VERSION" | grep -qxE '[0-9]+\.[0-9]+\.[0-9]+-ilp32\.[0-9]+(-test[0-9]*)?' ||
             { echo "version must look like 25.12.6-ilp32.1 (or ...-test for a dry run)"; exit 1; }
 
@@ -89,19 +89,26 @@ jobs:
           git checkout -q --detach "$COMMIT"
           git log -1 --format='%H %s'
 
-      - name: Check out test-ilp32
+      - name: Check out the release scripts (release/ of this workflow's commit)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ilp32-a64/test-ilp32
-          ref: ${{ inputs.test_ref }}
-          path: test-ilp32
+          path: main
+          sparse-checkout: release
+          persist-credentials: false
+
+      - name: Check out ilp32wrt/tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ilp32wrt/tests
+          ref: ${{ inputs.tests_ref }}
+          path: tests
           persist-credentials: false
 
       - name: Build
         env:
           VERSION: ${{ inputs.version }}
           TARGET: ${{ matrix.target }}
-        run: JOBS=$(nproc) test-ilp32/openwrt/build-release.sh openwrt "$VERSION" out "$TARGET"
+        run: TESTS=$PWD/tests JOBS=$(nproc) main/release/build-release.sh openwrt "$VERSION" out "$TARGET"
 
       - name: Attest the build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -149,12 +156,12 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends qemu-system-arm ipxe-qemu python3-pexpect > /dev/null
           qemu-system-aarch64 --version | head -1
 
-      - name: Check out test-ilp32
+      - name: Check out ilp32wrt/tests
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ilp32-a64/test-ilp32
-          ref: ${{ inputs.test_ref }}
-          path: test-ilp32
+          repository: ilp32wrt/tests
+          ref: ${{ inputs.tests_ref }}
+          path: tests
           persist-credentials: false
 
       - name: Download the release files
@@ -177,7 +184,7 @@ jobs:
         run: |
           mkdir -p results
           KERNEL=$PWD/$(ls release/*-initramfs-kernel.bin) PREBUILT=$PWD/tests OUTBASE=$PWD/results \
-            test-ilp32/openwrt/run-armsr-matrix.sh
+            tests/run-armsr-matrix.sh
 
       - name: Upload the test logs
         if: always()

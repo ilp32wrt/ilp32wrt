@@ -10,8 +10,8 @@ Software Freedom Conservancy (SFC). See [openwrt.org](https://openwrt.org/).
 Routing, netfilter and Wi-Fi run in the kernel, which stays LP64, so forwarding is not affected. Only the
 programs (fw4, LuCI, dnsmasq, hostapd, ...) are ILP32.
 
-Images: [Releases](https://github.com/ilp32-a64/ilp32wrt/releases) (pre-releases, experimental).
-Discussion: [Discussions](https://github.com/ilp32-a64/ilp32wrt/discussions).
+Images: [Releases](https://github.com/ilp32wrt/ilp32wrt/releases) (pre-releases, experimental).
+Discussion: [Discussions](https://github.com/ilp32wrt/ilp32wrt/discussions).
 
 ## Measured on hardware
 
@@ -35,9 +35,11 @@ else with GCC 14.3.
 - Configuration work (fw4, LuCI) is 2–10% slower with GCC, and only while settings are applied. With the
   hot packages compiled by clang, fw4 is within 2% of LP64.
 - In QEMU (armsr, 256 MB) the same workload gives -26% user space memory and 9.6 MB more free memory.
-- Method and scripts: [test-ilp32](https://github.com/ilp32-a64/test-ilp32) (`openwrt/`).
+- Method and scripts: [ilp32wrt/tests](https://github.com/ilp32wrt/tests).
 
-This default branch only holds this file. The source, based on *OpenWrt*, is in the branch below.
+This default branch holds this file, the release workflow and its build script and configurations
+(`release/`). The source, based on *OpenWrt*, is in the branch below; the tests are in
+[ilp32wrt/tests](https://github.com/ilp32wrt/tests).
 
 ## Branches
 
@@ -113,7 +115,7 @@ from v25.12.6-ilp32.3.
 
 ## Testing
 
-[ilp32-a64/test-ilp32](https://github.com/ilp32-a64/test-ilp32) (`openwrt/`) boots the armsr/armv8 ILP32
+[ilp32wrt/tests](https://github.com/ilp32wrt/tests) boots the armsr/armv8 ILP32
 image in QEMU and checks boot, the ILP32 dynamic linker, ubus and the procd services, WAN by DHCP and LAN,
 firewall4, uci, time, the musl and system call tests, and that nothing crashes. With Cortex-A53 and with
 `-cpu max` (pointer authentication, BTI, SVE): 23/23 checks pass, and 22/22 with every time32 and stat64
