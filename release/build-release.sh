@@ -1,14 +1,15 @@
 #!/bin/bash
 # Build an ILP32Wrt release for one target from a checked-out ilp32wrt tree: feeds as pinned by
-# the tree, toolchain from scratch, release/<target>.config, version strings, the fixed apk key. Collects
+# the tree, toolchain from scratch, config/<target>.config, version strings, the fixed apk key. Collects
 # the release files (and for armsr-armv8 the test programs for the QEMU checks), and checks the public files
 # for build host details. Used by the release workflow of ilp32wrt and on a local machine.
 #
 # Usage: build-release.sh <openwrt tree> <version> <output directory> [<target>]
 #   version: e.g. 25.12.6-ilp32.1 (CONFIG_VERSION_NUMBER; the tag is v<version>)
-#   target:  armsr-armv8 (default), mediatek-filogic, bcm27xx-bcm2710/2711/2712: the seed in release/
-# Environment: JOBS (default: nproc), EXTRA_PATTERNS (file with more extended regexps that must not appear
-#              in the public files, one per line; kept out of the repository)
+#   target:  armsr-armv8 (default), mediatek-filogic, bcm27xx-bcm2710/2711/2712: the seed in config/
+# Environment: JOBS (default: nproc), TESTS (checkout of ilp32wrt/tests; needed for armsr-armv8, which
+#              also builds the test programs for the QEMU checks), EXTRA_PATTERNS (file with more extended
+#              regexps that must not appear in the public files, one per line; kept out of the repository)
 # Output: <out>/release/ (images, manifests, <target>-*.buildinfo, <target>-public-info.txt,
 #         sha256sums-<target>), <out>/tests/ (armsr-armv8 only: extra.cpio, extra-notime32.cpio for
 #         run-openwrt-qemu.sh PREBUILT)
@@ -19,8 +20,12 @@ VERSION=${2:?version}
 mkdir -p "${3:?out}"; OUT=$(cd "$3" && pwd)
 TARGET=${4:-armsr-armv8}
 JOBS=${JOBS:-$(nproc)}
-SEED=$HERE/release/$TARGET.config
+SEED=$HERE/config/$TARGET.config
 [ -f "$SEED" ] || { echo "no seed $SEED" >&2; exit 1; }
+if [ "$TARGET" = armsr-armv8 ]; then
+	[ -x "${TESTS:-}/run-openwrt-qemu.sh" ] || { echo "armsr-armv8 needs TESTS=<ilp32wrt/tests checkout>" >&2; exit 1; }
+	TESTS=$(cd "$TESTS" && pwd)
+fi
 log() { echo "== $(date -u +%H:%M:%S) $*"; }
 
 # the release files of each target, as globs in bin/targets/<board>/<subtarget>-ilp32
@@ -84,7 +89,7 @@ done < <(grep -E '^CONFIG_|^# CONFIG_.* is not set' "$SEED"; echo "CONFIG_VERSIO
 
 # the image trusts only the fixed key of the ILP32Wrt package repository
 mkdir -p files/etc/apk/keys
-cp "$HERE/release/keys/ilp32wrt-apk.pem" files/etc/apk/keys/
+cp "$HERE/keys/ilp32wrt-apk.pem" files/etc/apk/keys/
 
 # the version strings and the kernel build user/host do not make OpenWrt rebuild what an earlier build of the
 # tree left: start from clean target directories (the toolchain stays; on a CI runner the tree is new anyway)
@@ -116,7 +121,7 @@ for f in config feeds version; do cp "$BIN/$f.buildinfo" "$R/$TARGET-$f.buildinf
 if [ "$TARGET" = armsr-armv8 ]; then
 	log "test programs"
 	for nt in 0 1; do
-		OPENWRT=$TREE BUILD_ONLY=1 NOTIME32=$nt OUT="$OUT/tests/build-$nt" "$HERE/run-openwrt-qemu.sh"
+		OPENWRT=$TREE BUILD_ONLY=1 NOTIME32=$nt OUT="$OUT/tests/build-$nt" "$TESTS/run-openwrt-qemu.sh"
 	done
 	cp "$OUT/tests/build-0/extra.cpio" "$OUT/tests/extra.cpio"
 	cp "$OUT/tests/build-1/extra.cpio" "$OUT/tests/extra-notime32.cpio"
@@ -140,7 +145,7 @@ KIMAGE=$(ls build_dir/target-*_ilp32_musl/linux-${BOARD}_$SUBTARGET/linux-*/vmli
 } > "$P"
 cat "$P"
 # build host details that must not be published: VM and runner user/host names, home directories, private
-# addresses, the author's non-public mail address, plus EXTRA_PATTERNS
+# addresses, plus EXTRA_PATTERNS (e.g. the author's non-public mail address)
 PAT='ubuntu-VirtualBox|ubuntu@|/home/|runner@|fv-az|(^|[^0-9.])(192\.168|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]+\.[0-9]+'
 bad=0
 grep -nE "$PAT" "$P" && bad=1
