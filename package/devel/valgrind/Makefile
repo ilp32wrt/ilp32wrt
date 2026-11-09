@@ -33,7 +33,8 @@ include $(INCLUDE_DIR)/kernel.mk
 define Package/valgrind
   SECTION:=devel
   CATEGORY:=Development
-  DEPENDS:=@mips||mipsel||mips64||mips64el||i386||x86_64||powerpc||arm_v7||aarch64||riscv64 +libpthread +librt
+  # no AArch64 ILP32 port (its arm64 platform is LP64); an LP64 valgrind only checks LP64 programs
+  DEPENDS:=@(mips||mipsel||mips64||mips64el||i386||x86_64||powerpc||arm_v7||aarch64||riscv64) @!AARCH64_ABI_ILP32 +libpthread +librt
   TITLE:=debugging and profiling tools for Linux
   URL:=http://www.valgrind.org
 endef
