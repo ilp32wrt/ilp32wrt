@@ -1,0 +1,134 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 20:43:02 +0800
+Subject: [PATCH] aarch64_ilp32: decode 64-bit arguments in aligned register
+ pairs
+
+The ILP32 syscall table of the kernel uses the AArch32 compat entry
+points for the syscalls that take a 64-bit argument after an odd
+number of 32-bit arguments: the 64-bit value is passed as on arm EABI,
+in an aligned pair of argument registers with the low half first, and
+fadvise64_64 has the arm argument order (fd, advice, offset, len).
+
+* src/util.c (getllval): Align the pair on AARCH64_ILP32.
+* src/fadvise.c (SYS_FUNC(fadvise64_64)): Take the advice from the
+second argument on AARCH64_ILP32.
+* src/linux/32/syscallent.h (ARCH_LL_ARG_PAD): New macro, 0 by default,
+added to the number of arguments of truncate64, ftruncate64, pread64,
+pwrite64 and readahead.
+* src/linux/aarch64_ilp32/syscallent.h (ARCH_LL_ARG_PAD): Define to 1.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+ src/fadvise.c                        |  3 ++-
+ src/linux/32/syscallent.h            | 19 ++++++++++++++-----
+ src/linux/aarch64_ilp32/syscallent.h |  3 +++
+ src/util.c                           |  3 ++-
+ 4 files changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/src/fadvise.c b/src/fadvise.c
+index 73a82f2..2426366 100644
+--- a/src/fadvise.c
++++ b/src/fadvise.c
+@@ -55,7 +55,8 @@ SYS_FUNC(fadvise64_64)
+ 
+ 	/* advice */
+ 	tprints_arg_next_name("advice");
+-#if defined __ARM_EABI__ || defined AARCH64 || defined POWERPC || defined XTENSA
++#if defined __ARM_EABI__ || defined AARCH64 || defined AARCH64_ILP32 \
++ || defined POWERPC || defined XTENSA
+ 	printxval(advise, tcp->u_arg[1], "POSIX_FADV_???");
+ #else
+ 	printxval(advise, tcp->u_arg[argn], "POSIX_FADV_???");
+diff --git a/src/linux/32/syscallent.h b/src/linux/32/syscallent.h
+index 44bb908..d5f38a8 100644
+--- a/src/linux/32/syscallent.h
++++ b/src/linux/32/syscallent.h
+@@ -8,6 +8,14 @@
+ #ifndef sys_ARCH_mmap
+ # define sys_ARCH_mmap sys_mmap
+ #endif
++/*
++ * The number of padding argument registers in front of a 64-bit argument
++ * that would otherwise start at an odd argument number:
++ * 1 if 64-bit arguments are passed in aligned pairs of registers.
++ */
++#ifndef ARCH_LL_ARG_PAD
++# define ARCH_LL_ARG_PAD 0
++#endif
+ [  0] = { 2,	TM,		SEN(io_setup),			"io_setup"		},
+ [  1] = { 1,	TM,		SEN(io_destroy),		"io_destroy"		},
+ [  2] = { 3,	0,		SEN(io_submit),			"io_submit"		},
+@@ -53,8 +61,8 @@
+ [ 42] = { 3,	0,		SEN(nfsservctl),		"nfsservctl"		},
+ [ 43] = { 3,	TF|TSF|TSFA,	SEN(statfs64),			"statfs64"		},
+ [ 44] = { 3,	TD|TFSF|TSFA,	SEN(fstatfs64),			"fstatfs64"		},
+-[ 45] = { 3,	TF,		SEN(truncate64),		"truncate64"		},
+-[ 46] = { 3,	TD,		SEN(ftruncate64),		"ftruncate64"		},
++[ 45] = { 3 + ARCH_LL_ARG_PAD,	TF,	SEN(truncate64),		"truncate64"		},
++[ 46] = { 3 + ARCH_LL_ARG_PAD,	TD,	SEN(ftruncate64),		"ftruncate64"		},
+ [ 47] = { 6,	TD,		SEN(fallocate),			"fallocate"		},
+ [ 48] = { 3,	TD|TF,		SEN(faccessat),			"faccessat"		},
+ [ 49] = { 1,	TF,		SEN(chdir),			"chdir"			},
+@@ -75,8 +83,8 @@
+ [ 64] = { 3,	TD,		SEN(write),			"write"			},
+ [ 65] = { 3,	TD,		SEN(readv),			"readv"			},
+ [ 66] = { 3,	TD,		SEN(writev),			"writev"		},
+-[ 67] = { 5,	TD,		SEN(pread),			"pread64"		},
+-[ 68] = { 5,	TD,		SEN(pwrite),			"pwrite64"		},
++[ 67] = { 5 + ARCH_LL_ARG_PAD,	TD,	SEN(pread),			"pread64"		},
++[ 68] = { 5 + ARCH_LL_ARG_PAD,	TD,	SEN(pwrite),			"pwrite64"		},
+ [ 69] = { 5,	TD,		SEN(preadv),			"preadv"		},
+ [ 70] = { 5,	TD,		SEN(pwritev),			"pwritev"		},
+ [ 71] = { 4,	TD|TN,		SEN(sendfile64),		"sendfile64"		},
+@@ -225,7 +233,7 @@
+ [210] = { 2,	TN,		SEN(shutdown),			"shutdown"		},
+ [211] = { 3,	TN,		SEN(sendmsg),			"sendmsg"		},
+ [212] = { 3,	TN,		SEN(recvmsg),			"recvmsg"		},
+-[213] = { 4,	TD,		SEN(readahead),			"readahead"		},
++[213] = { 4 + ARCH_LL_ARG_PAD,	TD,	SEN(readahead),			"readahead"		},
+ [214] = { 1,	TM|SI,		SEN(brk),			"brk"			},
+ [215] = { 2,	TM|SI,		SEN(munmap),			"munmap"		},
+ [216] = { 5,	TM|SI,		SEN(mremap),			"mremap"		},
+@@ -300,4 +308,5 @@
+ #include "syscallent-common.h"
+ 
+ #undef sys_ARCH_mmap
++#undef ARCH_LL_ARG_PAD
+ #undef ARCH_WANT_SYNC_FILE_RANGE2
+diff --git a/src/linux/aarch64_ilp32/syscallent.h b/src/linux/aarch64_ilp32/syscallent.h
+index 9c4bfe3..cbde288 100644
+--- a/src/linux/aarch64_ilp32/syscallent.h
++++ b/src/linux/aarch64_ilp32/syscallent.h
+@@ -8,7 +8,10 @@
+  * The generic 32-bit table (kernel: scripts/syscall.tbl with the
+  * "common 32 time32 stat64 memfd_secret" ABIs, compat entry points).
+  * mmap2 takes the offset in 4096-byte units, 84 is sync_file_range2.
++ * 64-bit arguments are passed as on arm: in an aligned pair of registers,
++ * the low half first.
+  */
++#define ARCH_LL_ARG_PAD 1
+ #define ARCH_WANT_SYNC_FILE_RANGE2 1
+ #define sys_ARCH_mmap sys_mmap_4koff
+ #include "../32/syscallent.h"
+diff --git a/src/util.c b/src/util.c
+index 0d6d7da..0fe7339 100644
+--- a/src/util.c
++++ b/src/util.c
+@@ -345,6 +345,7 @@ getllval(struct tcb *tcp, unsigned long long *val, unsigned int arg_no)
+ 	}
+ #else /* SIZEOF_KERNEL_LONG_T == 4 */
+ # if defined __ARM_EABI__	\
++  || defined AARCH64_ILP32	\
+   || defined LINUX_MIPSO32	\
+   || defined POWERPC		\
+   || defined XTENSA
+@@ -360,7 +361,7 @@ getllval(struct tcb *tcp, unsigned long long *val, unsigned int arg_no)
+ 	 */
+ 	if (arg_no == 3)
+ 		arg_no++;
+-# endif /* __ARM_EABI__ || LINUX_MIPSO32 || POWERPC || XTENSA || SH */
++# endif /* __ARM_EABI__ || AARCH64_ILP32 || LINUX_MIPSO32 || POWERPC || XTENSA || SH */
+ 	*val = ULONG_LONG(tcp->u_arg[arg_no], tcp->u_arg[arg_no + 1]);
+ 	arg_no += 2;
+ #endif

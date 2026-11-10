@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 20:52:28 +0800
+Subject: [PATCH] aarch64_ilp32: use the AArch32 struct stat64 for fstat64 and
+ fstatat64
+
+The kernel fills in its AArch32 struct stat64 for the fstat64 and
+fstatat64 syscalls of ILP32 tasks.  It differs from the generic
+struct stat64 that <asm/stat.h> gives to user space in the place of
+st_ino only: the 64-bit st_ino is at the end of the structure, and
+the generic st_ino slot holds padding and the truncated inode number.
+As a result st_ino was printed shifted left by 32 bits.
+
+* src/linux/aarch64_ilp32/asm_stat.h: New file.
+* src/Makefile.am (EXTRA_DIST): Add it.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+ src/Makefile.am                    |  1 +
+ src/linux/aarch64_ilp32/asm_stat.h | 41 ++++++++++++++++++++++++++++++
+ 2 files changed, 42 insertions(+)
+ create mode 100644 src/linux/aarch64_ilp32/asm_stat.h
+
+diff --git a/src/Makefile.am b/src/Makefile.am
+index a24400a..430ad40 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -511,6 +511,7 @@ EXTRA_DIST =				\
+ 	linux/aarch64_ilp32/arch_prstatus_regset.c	\
+ 	linux/aarch64_ilp32/arch_prstatus_regset.h	\
+ 	linux/aarch64_ilp32/arch_regs.c	\
++	linux/aarch64_ilp32/asm_stat.h	\
+ 	linux/aarch64_ilp32/get_error.c	\
+ 	linux/aarch64_ilp32/get_scno.c	\
+ 	linux/aarch64_ilp32/get_syscall_args.c	\
+diff --git a/src/linux/aarch64_ilp32/asm_stat.h b/src/linux/aarch64_ilp32/asm_stat.h
+new file mode 100644
+index 0000000..0a8a044
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/asm_stat.h
+@@ -0,0 +1,41 @@
++/*
++ * AArch64 ILP32: struct stat64.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#ifndef STRACE_AARCH64_ILP32_ASM_STAT_H
++# define STRACE_AARCH64_ILP32_ASM_STAT_H
++
++/*
++ * fstat64 and fstatat64 fill in the AArch32 struct stat64 of the kernel
++ * (arch/arm64/include/asm/stat.h), with st_ino at the end, and not the
++ * generic struct stat64 that <asm/stat.h> defines for user space.
++ */
++# define stat64 redirect_kernel_stat64
++# include "../generic/asm_stat.h"
++# undef stat64
++
++struct stat64 {
++	unsigned long long	st_dev;
++	unsigned char		pad0__[4];
++	unsigned int		st_ino__;
++	unsigned int		st_mode;
++	unsigned int		st_nlink;
++	unsigned int		st_uid;
++	unsigned int		st_gid;
++	unsigned long long	st_rdev;
++	unsigned char		pad3__[4];
++	long long		st_size;
++	unsigned int		st_blksize;
++	unsigned long long	st_blocks;
++	unsigned int		st_atime;
++	unsigned int		st_atime_nsec;
++	unsigned int		st_mtime;
++	unsigned int		st_mtime_nsec;
++	unsigned int		st_ctime;
++	unsigned int		st_ctime_nsec;
++	unsigned long long	st_ino;
++};
++
++#endif /* !STRACE_AARCH64_ILP32_ASM_STAT_H */

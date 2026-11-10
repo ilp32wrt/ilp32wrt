@@ -1,0 +1,418 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 20:22:32 +0800
+Subject: [PATCH] Add the aarch64_ilp32 architecture
+
+An ILP32 build of strace for AArch64 picked the aarch64 architecture,
+which uses the 64-bit syscall table and does not link when long is
+32 bits wide (the old time64 decoders are not built).
+
+Detect __ILP32__ in configure and select a new single-personality
+architecture, aarch64_ilp32, for ILP32 tracees: the generic 32-bit
+syscall table (mmap2 with a 4096-byte offset unit, sync_file_range2),
+32-bit kernel long, and the AArch64 general register set.  Syscall
+arguments are the low halves of x0-x5; the result is a sign-extended
+32-bit value in x0.
+
+Add AUDIT_ARCH_AARCH64ILP32 to the audit_arch xlat, kernel headers
+may not define it.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+ configure.ac                                  | 14 +++++++----
+ src/Makefile.am                               | 13 ++++++++++
+ src/linux/aarch64_ilp32/arch_defs_.h          | 12 ++++++++++
+ .../aarch64_ilp32/arch_prstatus_regset.c      |  7 ++++++
+ .../aarch64_ilp32/arch_prstatus_regset.h      |  7 ++++++
+ src/linux/aarch64_ilp32/arch_regs.c           | 11 +++++++++
+ src/linux/aarch64_ilp32/get_error.c           | 21 ++++++++++++++++
+ src/linux/aarch64_ilp32/get_scno.c            | 13 ++++++++++
+ src/linux/aarch64_ilp32/get_syscall_args.c    | 21 ++++++++++++++++
+ src/linux/aarch64_ilp32/ioctls_arch0.h        |  1 +
+ src/linux/aarch64_ilp32/ioctls_inc0.h         |  1 +
+ src/linux/aarch64_ilp32/raw_syscall.h         |  7 ++++++
+ src/linux/aarch64_ilp32/set_error.c           | 19 +++++++++++++++
+ src/linux/aarch64_ilp32/set_scno.c            |  7 ++++++
+ src/linux/aarch64_ilp32/syscallent.h          | 14 +++++++++++
+ src/xlat/audit_arch.h                         | 24 +++++++++++++++++++
+ src/xlat/audit_arch.in                        |  4 ++++
+ 17 files changed, 192 insertions(+), 4 deletions(-)
+ create mode 100644 src/linux/aarch64_ilp32/arch_defs_.h
+ create mode 100644 src/linux/aarch64_ilp32/arch_prstatus_regset.c
+ create mode 100644 src/linux/aarch64_ilp32/arch_prstatus_regset.h
+ create mode 100644 src/linux/aarch64_ilp32/arch_regs.c
+ create mode 100644 src/linux/aarch64_ilp32/get_error.c
+ create mode 100644 src/linux/aarch64_ilp32/get_scno.c
+ create mode 100644 src/linux/aarch64_ilp32/get_syscall_args.c
+ create mode 100644 src/linux/aarch64_ilp32/ioctls_arch0.h
+ create mode 100644 src/linux/aarch64_ilp32/ioctls_inc0.h
+ create mode 100644 src/linux/aarch64_ilp32/raw_syscall.h
+ create mode 100644 src/linux/aarch64_ilp32/set_error.c
+ create mode 100644 src/linux/aarch64_ilp32/set_scno.c
+ create mode 100644 src/linux/aarch64_ilp32/syscallent.h
+
+diff --git a/configure.ac b/configure.ac
+index ad12d20..8b083a1 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -69,11 +69,17 @@ karch_m32=
+ karch_mx32=
+ case "$host_cpu" in
+ aarch64*)
+-	arch=aarch64
+ 	karch=arm64
+-	arch_m32=arm
+-	cc_flags_m32=
+-	AC_DEFINE([AARCH64], 1, [Define for the AArch64 architecture.])
++	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#ifndef __ILP32__
++# error not ILP32
++#endif]], [[]])], [arch=aarch64_ilp32], [arch=aarch64])
++	if test "$arch" = "aarch64"; then
++		arch_m32=arm
++		cc_flags_m32=
++		AC_DEFINE([AARCH64], 1, [Define for the AArch64 architecture.])
++	else
++		AC_DEFINE([AARCH64_ILP32], 1, [Define for the AArch64 ILP32 ABI.])
++	fi
+ 	;;
+ alpha*)
+ 	arch=alpha
+diff --git a/src/Makefile.am b/src/Makefile.am
+index d46f880..a24400a 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -507,6 +507,19 @@ EXTRA_DIST =				\
+ 	linux/aarch64/shuffle_scno.c	\
+ 	linux/aarch64/syscallent.h	\
+ 	linux/aarch64/syscallent1.h	\
++	linux/aarch64_ilp32/arch_defs_.h	\
++	linux/aarch64_ilp32/arch_prstatus_regset.c	\
++	linux/aarch64_ilp32/arch_prstatus_regset.h	\
++	linux/aarch64_ilp32/arch_regs.c	\
++	linux/aarch64_ilp32/get_error.c	\
++	linux/aarch64_ilp32/get_scno.c	\
++	linux/aarch64_ilp32/get_syscall_args.c	\
++	linux/aarch64_ilp32/ioctls_arch0.h	\
++	linux/aarch64_ilp32/ioctls_inc0.h	\
++	linux/aarch64_ilp32/raw_syscall.h	\
++	linux/aarch64_ilp32/set_error.c	\
++	linux/aarch64_ilp32/set_scno.c	\
++	linux/aarch64_ilp32/syscallent.h	\
+ 	linux/alpha/arch_defs_.h	\
+ 	linux/alpha/arch_getrval2.c	\
+ 	linux/alpha/arch_regs.c		\
+diff --git a/src/linux/aarch64_ilp32/arch_defs_.h b/src/linux/aarch64_ilp32/arch_defs_.h
+new file mode 100644
+index 0000000..3f4d0a1
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/arch_defs_.h
+@@ -0,0 +1,12 @@
++/*
++ * AArch64 ILP32: architecture definitions.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++/*
++ * A 32-bit ABI on the AArch64 instruction set: 32-bit long and pointers,
++ * 32-bit kernel long, the generic 32-bit syscall table, AArch64 registers.
++ * Only ILP32 tracees are supported by an ILP32 strace.
++ */
++#define PERSONALITY0_AUDIT_ARCH { AUDIT_ARCH_AARCH64ILP32, 0 }
+diff --git a/src/linux/aarch64_ilp32/arch_prstatus_regset.c b/src/linux/aarch64_ilp32/arch_prstatus_regset.c
+new file mode 100644
+index 0000000..352b8bc
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/arch_prstatus_regset.c
+@@ -0,0 +1,7 @@
++/*
++ * AArch64 ILP32: NT_PRSTATUS regset, the same as LP64.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include "../aarch64/arch_prstatus_regset.c"
+diff --git a/src/linux/aarch64_ilp32/arch_prstatus_regset.h b/src/linux/aarch64_ilp32/arch_prstatus_regset.h
+new file mode 100644
+index 0000000..ca6f6b6
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/arch_prstatus_regset.h
+@@ -0,0 +1,7 @@
++/*
++ * AArch64 ILP32: NT_PRSTATUS regset, the same as LP64.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include "../aarch64/arch_prstatus_regset.h"
+diff --git a/src/linux/aarch64_ilp32/arch_regs.c b/src/linux/aarch64_ilp32/arch_regs.c
+new file mode 100644
+index 0000000..29f120b
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/arch_regs.c
+@@ -0,0 +1,11 @@
++/*
++ * AArch64 ILP32: register set, the same as LP64 (NT_PRSTATUS).
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++static struct user_pt_regs aarch64_regs;
++
++#define ARCH_REGS_FOR_GETREGSET	aarch64_regs
++#define ARCH_PC_REG		aarch64_regs.pc
++#define ARCH_SP_REG		aarch64_regs.sp
+diff --git a/src/linux/aarch64_ilp32/get_error.c b/src/linux/aarch64_ilp32/get_error.c
+new file mode 100644
+index 0000000..573c468
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/get_error.c
+@@ -0,0 +1,21 @@
++/*
++ * AArch64 ILP32: syscall result.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include "negated_errno.h"
++
++static void
++arch_get_error(struct tcb *tcp, const bool check_errno)
++{
++	/* x0 holds a sign-extended 32-bit result. */
++	const kernel_ulong_t x0 = (uint32_t) aarch64_regs.regs[0];
++
++	if (check_errno && is_negated_errno(x0)) {
++		tcp->u_rval = -1;
++		tcp->u_error = -x0;
++	} else {
++		tcp->u_rval = x0;
++	}
++}
+diff --git a/src/linux/aarch64_ilp32/get_scno.c b/src/linux/aarch64_ilp32/get_scno.c
+new file mode 100644
+index 0000000..a8e223c
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/get_scno.c
+@@ -0,0 +1,13 @@
++/*
++ * AArch64 ILP32: syscall number.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++/* Return codes: 1 - ok, 0 - ignore, other - error. */
++static int
++arch_get_scno(struct tcb *tcp)
++{
++	tcp->scno = aarch64_regs.regs[8];
++	return 1;
++}
+diff --git a/src/linux/aarch64_ilp32/get_syscall_args.c b/src/linux/aarch64_ilp32/get_syscall_args.c
+new file mode 100644
+index 0000000..431d42c
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/get_syscall_args.c
+@@ -0,0 +1,21 @@
++/*
++ * AArch64 ILP32: syscall arguments.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++/*
++ * Arguments are 32-bit, the kernel ignores the upper halves of x0-x5.
++ * Return -1 on error or 1 on success (never 0!).
++ */
++static int
++arch_get_syscall_args(struct tcb *tcp)
++{
++	tcp->u_arg[0] = (uint32_t) aarch64_regs.regs[0];
++	tcp->u_arg[1] = (uint32_t) aarch64_regs.regs[1];
++	tcp->u_arg[2] = (uint32_t) aarch64_regs.regs[2];
++	tcp->u_arg[3] = (uint32_t) aarch64_regs.regs[3];
++	tcp->u_arg[4] = (uint32_t) aarch64_regs.regs[4];
++	tcp->u_arg[5] = (uint32_t) aarch64_regs.regs[5];
++	return 1;
++}
+diff --git a/src/linux/aarch64_ilp32/ioctls_arch0.h b/src/linux/aarch64_ilp32/ioctls_arch0.h
+new file mode 100644
+index 0000000..e0d34a8
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/ioctls_arch0.h
+@@ -0,0 +1 @@
++#include "../aarch64/ioctls_arch0.h"
+diff --git a/src/linux/aarch64_ilp32/ioctls_inc0.h b/src/linux/aarch64_ilp32/ioctls_inc0.h
+new file mode 100644
+index 0000000..a72f85c
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/ioctls_inc0.h
+@@ -0,0 +1 @@
++#include "../32/ioctls_inc.h"
+diff --git a/src/linux/aarch64_ilp32/raw_syscall.h b/src/linux/aarch64_ilp32/raw_syscall.h
+new file mode 100644
+index 0000000..8e39a7b
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/raw_syscall.h
+@@ -0,0 +1,7 @@
++/*
++ * AArch64 ILP32: raw syscall, the same as LP64.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include "../aarch64/raw_syscall.h"
+diff --git a/src/linux/aarch64_ilp32/set_error.c b/src/linux/aarch64_ilp32/set_error.c
+new file mode 100644
+index 0000000..d4bb912
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/set_error.c
+@@ -0,0 +1,19 @@
++/*
++ * AArch64 ILP32: syscall result tampering.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++static int
++arch_set_error(struct tcb *tcp)
++{
++	aarch64_regs.regs[0] = (int64_t) -(int32_t) tcp->u_error;
++	return set_regs(tcp->pid);
++}
++
++static int
++arch_set_success(struct tcb *tcp)
++{
++	aarch64_regs.regs[0] = (int64_t) (int32_t) tcp->u_rval;
++	return set_regs(tcp->pid);
++}
+diff --git a/src/linux/aarch64_ilp32/set_scno.c b/src/linux/aarch64_ilp32/set_scno.c
+new file mode 100644
+index 0000000..a84d2e0
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/set_scno.c
+@@ -0,0 +1,7 @@
++/*
++ * AArch64 ILP32: syscall number tampering, the same as LP64.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include "../aarch64/set_scno.c"
+diff --git a/src/linux/aarch64_ilp32/syscallent.h b/src/linux/aarch64_ilp32/syscallent.h
+new file mode 100644
+index 0000000..9c4bfe3
+--- /dev/null
++++ b/src/linux/aarch64_ilp32/syscallent.h
+@@ -0,0 +1,14 @@
++/*
++ * AArch64 ILP32: syscall table.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++/*
++ * The generic 32-bit table (kernel: scripts/syscall.tbl with the
++ * "common 32 time32 stat64 memfd_secret" ABIs, compat entry points).
++ * mmap2 takes the offset in 4096-byte units, 84 is sync_file_range2.
++ */
++#define ARCH_WANT_SYNC_FILE_RANGE2 1
++#define sys_ARCH_mmap sys_mmap_4koff
++#include "../32/syscallent.h"
+diff --git a/src/xlat/audit_arch.h b/src/xlat/audit_arch.h
+index db085b8..15aba3f 100644
+--- a/src/xlat/audit_arch.h
++++ b/src/xlat/audit_arch.h
+@@ -6,6 +6,9 @@
+ #ifndef __AUDIT_ARCH_CONVENTION_MIPS64_N32
+ # define __AUDIT_ARCH_CONVENTION_MIPS64_N32	0x20000000
+ #endif
++#ifndef __AUDIT_ARCH_CONVENTION_AARCH64_ILP32
++# define __AUDIT_ARCH_CONVENTION_AARCH64_ILP32	0x10000000
++#endif
+ #ifndef __AUDIT_ARCH_64BIT
+ # define __AUDIT_ARCH_64BIT	0x80000000
+ #endif
+@@ -390,6 +393,13 @@ DIAG_POP_IGNORE_TAUTOLOGICAL_COMPARE
+ #else
+ # define AUDIT_ARCH_XTENSA (EM_XTENSA)
+ #endif
++#if defined(AUDIT_ARCH_AARCH64ILP32) || (defined(HAVE_DECL_AUDIT_ARCH_AARCH64ILP32) && HAVE_DECL_AUDIT_ARCH_AARCH64ILP32)
++DIAG_PUSH_IGNORE_TAUTOLOGICAL_COMPARE
++static_assert((AUDIT_ARCH_AARCH64ILP32) == ((EM_AARCH64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE|__AUDIT_ARCH_CONVENTION_AARCH64_ILP32)), "AUDIT_ARCH_AARCH64ILP32 != (EM_AARCH64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE|__AUDIT_ARCH_CONVENTION_AARCH64_ILP32)");
++DIAG_POP_IGNORE_TAUTOLOGICAL_COMPARE
++#else
++# define AUDIT_ARCH_AARCH64ILP32 (EM_AARCH64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE|__AUDIT_ARCH_CONVENTION_AARCH64_ILP32)
++#endif
+ #undef XLAT_PREV_VAL
+ 
+ #ifndef XLAT_MACROS_ONLY
+@@ -401,6 +411,9 @@ static const struct xlat_data audit_arch_xdata[] = {
+ #ifndef __AUDIT_ARCH_CONVENTION_MIPS64_N32
+ # define __AUDIT_ARCH_CONVENTION_MIPS64_N32	0x20000000
+ #endif
++#ifndef __AUDIT_ARCH_CONVENTION_AARCH64_ILP32
++# define __AUDIT_ARCH_CONVENTION_AARCH64_ILP32	0x10000000
++#endif
+ #ifndef __AUDIT_ARCH_64BIT
+ # define __AUDIT_ARCH_64BIT	0x80000000
+ #endif
+@@ -570,6 +583,9 @@ static const struct xlat_data audit_arch_xdata[] = {
+  XLAT(AUDIT_ARCH_XTENSA),
+  #define XLAT_VAL_53 ((unsigned) (AUDIT_ARCH_XTENSA))
+  #define XLAT_STR_53 STRINGIFY(AUDIT_ARCH_XTENSA)
++ XLAT(AUDIT_ARCH_AARCH64ILP32),
++ #define XLAT_VAL_54 ((unsigned) (AUDIT_ARCH_AARCH64ILP32))
++ #define XLAT_STR_54 STRINGIFY(AUDIT_ARCH_AARCH64ILP32)
+ };
+ const struct xlat audit_arch[1] = { {
+  .data = audit_arch_xdata,
+@@ -737,6 +753,9 @@ const struct xlat audit_arch[1] = { {
+ #  endif
+ #  ifdef XLAT_VAL_53
+   | XLAT_VAL_53
++#  endif
++#  ifdef XLAT_VAL_54
++  | XLAT_VAL_54
+ #  endif
+   ,
+  .flags_strsz = 0
+@@ -901,6 +920,9 @@ const struct xlat audit_arch[1] = { {
+ #  endif
+ #  ifdef XLAT_STR_53
+   + sizeof(XLAT_STR_53)
++#  endif
++#  ifdef XLAT_STR_54
++  + sizeof(XLAT_STR_54)
+ #  endif
+   ,
+ } };
+@@ -1014,6 +1036,8 @@ DIAG_POP_IGNORE_TAUTOLOGICAL_CONSTANT_COMPARE
+ #  undef XLAT_VAL_52
+ #  undef XLAT_STR_53
+ #  undef XLAT_VAL_53
++#  undef XLAT_STR_54
++#  undef XLAT_VAL_54
+ # endif /* !IN_MPERS */
+ 
+ #endif /* !XLAT_MACROS_ONLY */
+diff --git a/src/xlat/audit_arch.in b/src/xlat/audit_arch.in
+index 0760eb7..9a943b4 100644
+--- a/src/xlat/audit_arch.in
++++ b/src/xlat/audit_arch.in
+@@ -1,6 +1,9 @@
+ #ifndef __AUDIT_ARCH_CONVENTION_MIPS64_N32
+ # define __AUDIT_ARCH_CONVENTION_MIPS64_N32	0x20000000
+ #endif
++#ifndef __AUDIT_ARCH_CONVENTION_AARCH64_ILP32
++# define __AUDIT_ARCH_CONVENTION_AARCH64_ILP32	0x10000000
++#endif
+ #ifndef __AUDIT_ARCH_64BIT
+ # define __AUDIT_ARCH_64BIT	0x80000000
+ #endif
+@@ -62,3 +65,4 @@ AUDIT_ARCH_UNICORE	(EM_UNICORE|__AUDIT_ARCH_LE)
+ AUDIT_ARCH_V850		(EM_V850|__AUDIT_ARCH_LE) /* Removed in v2.6.27-rc1~721 */
+ AUDIT_ARCH_X86_64	(EM_X86_64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE)
+ AUDIT_ARCH_XTENSA	(EM_XTENSA)
++AUDIT_ARCH_AARCH64ILP32	(EM_AARCH64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE|__AUDIT_ARCH_CONVENTION_AARCH64_ILP32)
