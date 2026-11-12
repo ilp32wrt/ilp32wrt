@@ -36,6 +36,9 @@ ARCH=${APK_LP64_ARCH:-${DISTRIB_ARCH%_ilp32}}
 
 check() {
 	[ -e /lib/ld-musl-aarch64_ilp32.so.1 ] || die "this is not an ILP32Wrt system"
+	# ILP32Wrt 25.12.6-ilp32.4 and later ship LP64 packages in the system apk database (libc-lp64, libraries in
+	# /usr/lib/lp64); both would own the LP64 loader link and its search path file
+	[ -e /usr/lib/lp64/libc.so ] && die "LP64 packages are installed with apk (libc-lp64); apk-lp64 cannot be used next to them"
 	case "$ARCH" in aarch64_*) ;; *) die "unexpected package architecture '$ARCH'" ;; esac
 	case "$VERSION" in [0-9]*.[0-9]*.[0-9]*) ;;
 	*) die "cannot tell the OpenWrt release from '$DISTRIB_RELEASE'; set APK_LP64_VERSION" ;; esac
