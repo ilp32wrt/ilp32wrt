@@ -1,0 +1,228 @@
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Subject: [PATCH] JIT: NEON fast forward on AArch64 ILP32
+
+The ARM64 NEON fast forward code moves the 64-bit mask of a 16-byte
+block (4 bits for each byte) into one register and tests, shifts and
+counts it there. On AArch64 ILP32 sljit handles a register as a 32-bit
+word, and a 64-bit SIMD element cannot be moved into it.
+
+On ILP32 the mask is processed with 64-bit instructions emitted through
+sljit_emit_op_custom. In the loop the two halves of the mask are or-ed
+together (FMOV, ORR), so that a 32-bit comparison can test it: one
+instruction more than on LP64 for each block. The bit index of the
+first match is computed once (FMOV, RBIT, CLZ; LSRV/LSLV in the first,
+unaligned block) and only that small number stays in the register.
+
+The LP64 lines are not touched. pcre2_jit_test passes for the 8, 16 and
+32 bit libraries on ILP32 in QEMU (cortex-a53 and max).
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+ src/pcre2_jit_simd_inc.h | 112 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 112 insertions(+)
+
+diff --git a/src/pcre2_jit_simd_inc.h b/src/pcre2_jit_simd_inc.h
+index 0a24cda..0ab6309 100644
+--- a/src/pcre2_jit_simd_inc.h
++++ b/src/pcre2_jit_simd_inc.h
+@@ -778,6 +778,70 @@ if (common->match_end_ptr != 0)
+ 
+ #define JIT_HAS_FAST_FORWARD_CHAR_SIMD 1
+ 
++#if (defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++
++/* AArch64 ILP32: sljit handles a register as a 32 bit word, but the mask
++of a 16 byte block (4 bits for each byte) has 64 bits. The mask is
++processed with 64 bit instructions, which are emitted directly, and only
++the bit index of the first match (64 when there is none) is left in dst.
++When skip_reg is not zero, as many of the lowest bits of the mask are
++cleared first as the value of that register. */
++
++static void simd_mask_to_offset(struct sljit_compiler *compiler, sljit_s32 dst, sljit_s32 skip_reg)
++{
++sljit_u32 dst_ind = (sljit_u32)sljit_get_register_index(SLJIT_GP_REGISTER, dst);
++sljit_u32 data_ind = (sljit_u32)sljit_get_register_index(SLJIT_SIMD_REG_128, SLJIT_VR0);
++sljit_u32 skip_ind;
++sljit_u32 instruction;
++
++/* FMOV Xdst, Ddata */
++instruction = 0x9e660000 | (data_ind << 5) | dst_ind;
++sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
++
++if (skip_reg != 0)
++  {
++  skip_ind = (sljit_u32)sljit_get_register_index(SLJIT_GP_REGISTER, skip_reg);
++
++  /* LSRV Xdst, Xdst, Xskip */
++  instruction = 0x9ac02400 | (skip_ind << 16) | (dst_ind << 5) | dst_ind;
++  sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
++
++  /* LSLV Xdst, Xdst, Xskip */
++  instruction = 0x9ac02000 | (skip_ind << 16) | (dst_ind << 5) | dst_ind;
++  sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
++  }
++
++/* RBIT Xdst, Xdst */
++instruction = 0xdac00000 | (dst_ind << 5) | dst_ind;
++sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
++
++/* CLZ Xdst, Xdst */
++instruction = 0xdac01000 | (dst_ind << 5) | dst_ind;
++sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
++}
++
++
++/* Only for testing whether the mask is zero: the lower 32 bits of dst
++become the two halves of the mask or-ed together, which a 32 bit
++comparison can test. One instruction more than on LP64 for each block. */
++
++static void simd_mask_test(struct sljit_compiler *compiler, sljit_s32 dst)
++{
++sljit_u32 dst_ind = (sljit_u32)sljit_get_register_index(SLJIT_GP_REGISTER, dst);
++sljit_u32 data_ind = (sljit_u32)sljit_get_register_index(SLJIT_SIMD_REG_128, SLJIT_VR0);
++sljit_u32 instruction;
++
++/* FMOV Xdst, Ddata */
++instruction = 0x9e660000 | (data_ind << 5) | dst_ind;
++sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
++
++/* ORR Xdst, Xdst, Xdst, LSR #32 */
++instruction = 0xaa400000 | (dst_ind << 16) | (32 << 10) | (dst_ind << 5) | dst_ind;
++sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
++}
++
++#endif /* SLJIT_ARM_64_ILP32 */
++
+ static void fast_forward_char_pair_sse2_compare(struct sljit_compiler *compiler, vector_compare_type compare_type,
+   int step, sljit_u32 dst_ind, sljit_u32 cmp1_ind, sljit_u32 cmp2_ind, sljit_u32 tmp_ind)
+ {
+@@ -892,6 +956,11 @@ for (i = 0; i < 3; i++)
+ instruction = 0x0f0c8400 | (data_ind << 5) | data_ind;
+ sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
+ 
++#if (defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++OP2(SLJIT_SHL, TMP2, 0, TMP2, 0, SLJIT_IMM, 2);
++simd_mask_to_offset(compiler, TMP1, TMP2);
++quit = CMP(SLJIT_NOT_EQUAL, TMP1, 0, SLJIT_IMM, 64);
++#else /* !SLJIT_ARM_64_ILP32 */
+ sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64, SLJIT_VR0, 0, TMP1, 0);
+ 
+ OP2(SLJIT_SHL, TMP2, 0, TMP2, 0, SLJIT_IMM, 2);
+@@ -899,6 +968,7 @@ OP2(SLJIT_LSHR, TMP1, 0, TMP1, 0, TMP2, 0);
+ OP2(SLJIT_SHL, TMP1, 0, TMP1, 0, TMP2, 0);
+ 
+ quit = CMP(SLJIT_NOT_ZERO, TMP1, 0, SLJIT_IMM, 0);
++#endif /* SLJIT_ARM_64_ILP32 */
+ 
+ /* Second part (aligned) */
+ start = LABEL();
+@@ -917,12 +987,22 @@ for (i = 0; i < 3; i++)
+ instruction = 0x0f0c8400 | (data_ind << 5) | data_ind;
+ sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
+ 
++#if (defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++simd_mask_test(compiler, TMP1);
++CMPTO(SLJIT_ZERO, TMP1, 0, SLJIT_IMM, 0, start);
++/* The bit index of the first match. */
++simd_mask_to_offset(compiler, TMP1, 0);
++#else /* !SLJIT_ARM_64_ILP32 */
+ sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64, SLJIT_VR0, 0, TMP1, 0);
+ CMPTO(SLJIT_ZERO, TMP1, 0, SLJIT_IMM, 0, start);
++#endif /* SLJIT_ARM_64_ILP32 */
+ 
+ JUMPHERE(quit);
+ 
++#if !(defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++/* On ILP32 TMP1 is the bit index already. */
+ sljit_emit_op1(compiler, SLJIT_CTZ, TMP1, 0, TMP1, 0);
++#endif /* !SLJIT_ARM_64_ILP32 */
+ OP2(SLJIT_LSHR, TMP1, 0, TMP1, 0, SLJIT_IMM, 2);
+ OP2(SLJIT_ADD, STR_PTR, 0, STR_PTR, 0, TMP1, 0);
+ 
+@@ -1008,6 +1088,11 @@ for (i = 0; i < 3; i++)
+ instruction = 0x0f0c8400 | (data_ind << 5) | data_ind;
+ sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
+ 
++#if (defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++OP2(SLJIT_SHL, TMP2, 0, TMP2, 0, SLJIT_IMM, 2);
++simd_mask_to_offset(compiler, TMP1, TMP2);
++quit = CMP(SLJIT_NOT_EQUAL, TMP1, 0, SLJIT_IMM, 64);
++#else /* !SLJIT_ARM_64_ILP32 */
+ sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64, SLJIT_VR0, 0, TMP1, 0);
+ 
+ OP2(SLJIT_SHL, TMP2, 0, TMP2, 0, SLJIT_IMM, 2);
+@@ -1015,6 +1100,7 @@ OP2(SLJIT_LSHR, TMP1, 0, TMP1, 0, TMP2, 0);
+ OP2(SLJIT_SHL, TMP1, 0, TMP1, 0, TMP2, 0);
+ 
+ quit = CMP(SLJIT_NOT_ZERO, TMP1, 0, SLJIT_IMM, 0);
++#endif /* SLJIT_ARM_64_ILP32 */
+ 
+ /* Second part (aligned) */
+ start = LABEL();
+@@ -1032,12 +1118,22 @@ for (i = 0; i < 3; i++)
+ instruction = 0x0f0c8400 | (data_ind << 5) | data_ind;
+ sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
+ 
++#if (defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++simd_mask_test(compiler, TMP1);
++CMPTO(SLJIT_ZERO, TMP1, 0, SLJIT_IMM, 0, start);
++/* The bit index of the first match. */
++simd_mask_to_offset(compiler, TMP1, 0);
++#else /* !SLJIT_ARM_64_ILP32 */
+ sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64, SLJIT_VR0, 0, TMP1, 0);
+ CMPTO(SLJIT_ZERO, TMP1, 0, SLJIT_IMM, 0, start);
++#endif /* SLJIT_ARM_64_ILP32 */
+ 
+ JUMPHERE(quit);
+ 
++#if !(defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++/* On ILP32 TMP1 is the bit index already. */
+ sljit_emit_op1(compiler, SLJIT_CTZ, TMP1, 0, TMP1, 0);
++#endif /* !SLJIT_ARM_64_ILP32 */
+ OP2(SLJIT_LSHR, TMP1, 0, TMP1, 0, SLJIT_IMM, 2);
+ OP2(SLJIT_ADD, TMP1, 0, TMP1, 0, TMP3, 0);
+ add_jump(compiler, &not_found, CMP(SLJIT_GREATER_EQUAL, TMP1, 0, STR_END, 0));
+@@ -1193,6 +1289,11 @@ sljit_emit_simd_op2(compiler, SLJIT_SIMD_OP2_AND | SLJIT_SIMD_REG_128, SLJIT_VR0
+ instruction = 0x0f0c8400 | (data1_ind << 5) | data1_ind;
+ sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
+ 
++#if (defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++OP2(SLJIT_SHL, TMP2, 0, TMP2, 0, SLJIT_IMM, 2);
++simd_mask_to_offset(compiler, TMP1, TMP2);
++jump[0] = CMP(SLJIT_NOT_EQUAL, TMP1, 0, SLJIT_IMM, 64);
++#else /* !SLJIT_ARM_64_ILP32 */
+ sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64, SLJIT_VR0, 0, TMP1, 0);
+ 
+ /* Ignore matches before the first STR_PTR. */
+@@ -1201,6 +1302,7 @@ OP2(SLJIT_LSHR, TMP1, 0, TMP1, 0, TMP2, 0);
+ OP2(SLJIT_SHL, TMP1, 0, TMP1, 0, TMP2, 0);
+ 
+ jump[0] = CMP(SLJIT_NOT_ZERO, TMP1, 0, SLJIT_IMM, 0);
++#endif /* SLJIT_ARM_64_ILP32 */
+ 
+ /* Main loop. */
+ start = LABEL();
+@@ -1223,13 +1325,23 @@ sljit_emit_simd_op2(compiler, SLJIT_SIMD_OP2_AND | SLJIT_SIMD_REG_128, SLJIT_VR0
+ instruction = 0x0f0c8400 | (data1_ind << 5) | data1_ind;
+ sljit_emit_op_custom(compiler, &instruction, sizeof(sljit_u32));
+ 
++#if (defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++simd_mask_test(compiler, TMP1);
++CMPTO(SLJIT_ZERO, TMP1, 0, SLJIT_IMM, 0, start);
++/* The bit index of the first match. */
++simd_mask_to_offset(compiler, TMP1, 0);
++#else /* !SLJIT_ARM_64_ILP32 */
+ sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64, SLJIT_VR0, 0, TMP1, 0);
+ 
+ CMPTO(SLJIT_ZERO, TMP1, 0, SLJIT_IMM, 0, start);
++#endif /* SLJIT_ARM_64_ILP32 */
+ 
+ JUMPHERE(jump[0]);
+ 
++#if !(defined SLJIT_ARM_64_ILP32 && SLJIT_ARM_64_ILP32)
++/* On ILP32 TMP1 is the bit index already. */
+ sljit_emit_op1(compiler, SLJIT_CTZ, TMP1, 0, TMP1, 0);
++#endif /* !SLJIT_ARM_64_ILP32 */
+ OP2(SLJIT_LSHR, TMP1, 0, TMP1, 0, SLJIT_IMM, 2);
+ OP2(SLJIT_ADD, STR_PTR, 0, STR_PTR, 0, TMP1, 0);
+ 
