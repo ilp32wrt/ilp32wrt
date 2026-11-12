@@ -1,0 +1,14 @@
+# Packages shipped as LP64 builds (no ILP32 build): repacked from the official OpenWrt release of the
+# same upstream version by lp64-repack.py; their dependencies follow automatically.
+# LuaJIT and its users (LuaJIT has no AArch64 ILP32 port)
+luajit
+dnsdist
+knot-resolver
+snort3
+# QEMU host side (64-bit guests need a 64-bit host; armsr only upstream)
+qemu-aarch64-softmmu
+qemu-arm-softmmu
+qemu-x86_64-softmmu
+qemu-bridge-helper
+qemu-img
+qemu-nbd

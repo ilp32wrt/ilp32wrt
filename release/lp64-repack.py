@@ -15,7 +15,8 @@ version and rewritten so that both ABIs share one apk database without file conf
 - other plugins (e.g. usr/lib/ucode/*.so) belong to ILP32 interpreters: not converted, the ILP32Wrt
   package is used.
 - dependencies without shared objects use the ILP32Wrt package of the same name; if ILP32Wrt does not
-  ship it (names from $ILP32_NAMES, a TSV with the package name in column 2), it is copied unchanged.
+  ship it (names from $ILP32_NAMES, a TSV with the package name in column 2), pure data (no ELF files)
+  is copied unchanged and a package with programs is converted like a root.
 - libc-lp64 also carries the LP64 loader link /lib/ld-musl-aarch64.so.1 -> /usr/lib/lp64/libc.so and
   the search path file /etc/ld-musl-aarch64.path ("/usr/lib/lp64"). The ILP32 loader is
   /lib/ld-musl-aarch64_ilp32.so.1 and does not search usr/lib/lp64.
@@ -36,8 +37,8 @@ ILP32 = set()
 if os.environ.get('ILP32_NAMES'):
     for line in open(os.environ['ILP32_NAMES']):
         f = line.split('\t')
-        if len(f) > 1: ILP32.add(f[1])
-BASE = "https://downloads.openwrt.org/releases/25.12.6"
+        if len(f) > 1: ILP32.add(f[1].strip())
+BASE = "https://downloads.openwrt.org/releases/" + os.environ.get("UPSTREAM_VERSION", "25.12.6")
 os.umask(0o022)
 OUT.mkdir(parents=True, exist_ok=True); WORK.mkdir(parents=True, exist_ok=True)
 
@@ -105,6 +106,14 @@ def extract(apkf, n):
                    capture_output=True)
     return d
 
+def has_elf(d):
+    for f in d.rglob("*"):
+        if f.is_file() and not f.is_symlink():
+            with open(f, "rb") as h:
+                if h.read(4) == b"\x7fELF":
+                    return True
+    return False
+
 def kind_of(d):
     """lib: shared objects directly in lib/ or usr/lib/; lua: only Lua modules; plugin: other .so in
     subdirectories (modules of ILP32 interpreters such as ucode); none: no shared objects."""
@@ -140,8 +149,9 @@ while todo:
     if n not in cls:
         k = "lib" if n == "libc" else kind_of(extracted[n])
         cls[n] = {"lib": "lib", "lua": "lua"}.get(k, "skip")
-        if cls[n] == "skip" and ILP32 and n not in ILP32 and k == "none":
-            cls[n] = "data"
+        if cls[n] == "skip" and ILP32 and n not in ILP32:
+            # ILP32Wrt does not ship it: pure data is copied, programs are converted like a root
+            cls[n] = "app" if has_elf(extracted[n]) else "data"
     if cls[n] == "skip":
         continue
     for d in index[n]["depends"]:
