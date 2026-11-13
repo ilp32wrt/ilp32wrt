@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 13:58:57 +0800
+Subject: [PATCH] arm64: drop the empty COMPAT_ARCH_DLINFO of binfmt_elf32.c
+
+asm/elf.h defines COMPAT_ARCH_DLINFO for AArch32 (AT_SYSINFO_EHDR with
+COMPAT_VDSO, empty otherwise) and is included by compat_binfmt_elf.c after
+the empty definition in binfmt_elf32.c, which only caused a "redefined"
+warning with COMPAT_VDSO=y. The asm/elf.h one was already in effect.
+---
+ arch/arm64/kernel/binfmt_elf32.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+--- a/arch/arm64/kernel/binfmt_elf32.c
++++ b/arch/arm64/kernel/binfmt_elf32.c
+@@ -17,7 +17,6 @@
+ 	set_thread_flag(TIF_32BIT);					\
+ })
+ 
+-#define COMPAT_ARCH_DLINFO
+ #define COMPAT_ELF_HWCAP		(a32_elf_hwcap)
+ #define COMPAT_ELF_HWCAP2		(a32_elf_hwcap2)
+ 

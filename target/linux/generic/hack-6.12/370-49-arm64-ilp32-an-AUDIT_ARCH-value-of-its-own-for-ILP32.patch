@@ -1,0 +1,119 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Mon, 9 Nov 2026 20:05:31 +0800
+Subject: [PATCH] arm64: ilp32: an AUDIT_ARCH value of its own for ILP32 tasks
+
+ILP32 tasks reported AUDIT_ARCH_AARCH64, so seccomp filters and audit
+rules could not tell them from AArch64 tasks, although ILP32 uses its own
+syscall table: 32-bit variants on 11 numbers (fcntl64, fstatat64, mmap2,
+...), the time64 calls 403-423, and no renameat, getrlimit or setrlimit.
+A deny-list filter written for AArch64 therefore missed the ILP32 time64
+calls, for example clock_settime64 when clock_settime was denied, and
+SystemCallArchitectures=native could not exclude ILP32.
+
+The series had AUDIT_ARCH_AARCH64ILP32 = EM_AARCH64|__AUDIT_ARCH_LE once;
+it was removed because without __AUDIT_ARCH_64BIT audit classified ILP32
+calls with the AArch32 compat tables. Do what MIPS n32 does instead: keep
+__AUDIT_ARCH_64BIT and add a convention value,
+__AUDIT_ARCH_CONVENTION_AARCH64_ILP32 (0x10000000), giving 0xd00000b7.
+Audit then classifies ILP32 calls with the native asm-generic tables, and
+a filter written for AArch64 sees an unknown arch and applies its bad-arch
+action instead of letting the call through.
+
+seccomp keeps action cache bitmaps only for the native and compat arch
+values. Without AARCH32_EL0 it skipped the arch check and would have used
+the AArch64 bitmap for ILP32 calls; with AARCH32_EL0 it warned. Let an
+architecture name an arch value without a cache (SECCOMP_ARCH_UNCACHED),
+for which the filters always run.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+ arch/arm64/include/asm/seccomp.h |  4 ++++
+ arch/arm64/include/asm/syscall.h | 10 ++++++++++
+ include/uapi/linux/audit.h       |  3 +++
+ kernel/seccomp.c                 | 13 +++++++++++++
+ 4 files changed, 30 insertions(+)
+
+--- a/arch/arm64/include/asm/seccomp.h
++++ b/arch/arm64/include/asm/seccomp.h
+@@ -53,6 +53,10 @@ static inline const int *get_compat_mode1_syscalls(void)
+ #define SECCOMP_ARCH_NATIVE		AUDIT_ARCH_AARCH64
+ #define SECCOMP_ARCH_NATIVE_NR		NR_syscalls
+ #define SECCOMP_ARCH_NATIVE_NAME	"aarch64"
++#ifdef CONFIG_ARM64_ILP32
++/* ILP32 tasks have their own arch value and no action cache */
++# define SECCOMP_ARCH_UNCACHED		AUDIT_ARCH_AARCH64ILP32
++#endif
+ #ifdef CONFIG_AARCH32_EL0
+ #include <asm/unistd_compat_32.h>
+ # define SECCOMP_ARCH_COMPAT		AUDIT_ARCH_ARM
+--- a/arch/arm64/include/asm/syscall.h
++++ b/arch/arm64/include/asm/syscall.h
+@@ -86,6 +86,16 @@ static inline int syscall_get_arch(struct task_struct *task)
+ 	if (is_a32_compat_thread(task_thread_info(task)))
+ 		return AUDIT_ARCH_ARM;
+ 
++	/*
++	 * ILP32 uses the asm-generic numbers like AArch64, but its own table: 32-bit
++	 * variants on 11 numbers, the time64 calls 403-423, no renameat, getrlimit or
++	 * setrlimit. A filter written for AArch64 must not apply to it unchanged, so
++	 * ILP32 has its own value; it keeps __AUDIT_ARCH_64BIT so that audit does not
++	 * classify its calls with the AArch32 compat tables.
++	 */
++	if (is_ilp32_compat_thread(task_thread_info(task)))
++		return AUDIT_ARCH_AARCH64ILP32;
++
+ 	return AUDIT_ARCH_AARCH64;
+ }
+ 
+--- a/include/uapi/linux/audit.h
++++ b/include/uapi/linux/audit.h
+@@ -383,12 +383,15 @@ enum {
+  */
+ #define __AUDIT_ARCH_CONVENTION_MASK 0x30000000
+ #define __AUDIT_ARCH_CONVENTION_MIPS64_N32 0x20000000
++#define __AUDIT_ARCH_CONVENTION_AARCH64_ILP32 0x10000000
+ 
+ /* distinguish syscall tables */
+ #define __AUDIT_ARCH_64BIT 0x80000000
+ #define __AUDIT_ARCH_LE	   0x40000000
+ 
+ #define AUDIT_ARCH_AARCH64	(EM_AARCH64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE)
++#define AUDIT_ARCH_AARCH64ILP32	(EM_AARCH64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE|\
++				 __AUDIT_ARCH_CONVENTION_AARCH64_ILP32)
+ #define AUDIT_ARCH_ALPHA	(EM_ALPHA|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE)
+ #define AUDIT_ARCH_ARCOMPACT	(EM_ARCOMPACT|__AUDIT_ARCH_LE)
+ #define AUDIT_ARCH_ARCOMPACTBE	(EM_ARCOMPACT)
+--- a/kernel/seccomp.c
++++ b/kernel/seccomp.c
+@@ -373,10 +373,17 @@ static inline bool seccomp_cache_check_allow(const struct seccomp_filter *sfilte
+ 	const struct action_cache *cache = &sfilter->cache;
+ 
+ #ifndef SECCOMP_ARCH_COMPAT
++#ifndef SECCOMP_ARCH_UNCACHED
+ 	/* A native-only architecture doesn't need to check sd->arch. */
+ 	return seccomp_cache_check_allow_bitmap(cache->allow_native,
+ 						SECCOMP_ARCH_NATIVE_NR,
+ 						syscall_nr);
++#else
++	if (likely(sd->arch == SECCOMP_ARCH_NATIVE))
++		return seccomp_cache_check_allow_bitmap(cache->allow_native,
++							SECCOMP_ARCH_NATIVE_NR,
++							syscall_nr);
++#endif
+ #else
+ 	if (likely(sd->arch == SECCOMP_ARCH_NATIVE))
+ 		return seccomp_cache_check_allow_bitmap(cache->allow_native,
+@@ -388,6 +395,12 @@ static inline bool seccomp_cache_check_allow(const struct seccomp_filter *sfilte
+ 							syscall_nr);
+ #endif /* SECCOMP_ARCH_COMPAT */
+ 
++#ifdef SECCOMP_ARCH_UNCACHED
++	/* An arch value without a bitmap: always run the filters */
++	if (sd->arch == SECCOMP_ARCH_UNCACHED)
++		return false;
++#endif
++
+ 	WARN_ON_ONCE(true);
+ 	return false;
+ }
