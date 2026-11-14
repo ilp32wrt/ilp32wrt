@@ -1,0 +1,34 @@
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Subject: [PATCH] aarch64: ILP32: the GOT entry of a local symbol is 4 bytes
+
+elfNN_aarch64_final_link_relocate initialises the GOT entry of a local
+symbol with bfd_put_64. In an ELF32 link the entry is 4 bytes, so the write
+also clears the next entry. When that entry was filled in earlier and has
+no dynamic relocation with an addend that restores it, its value is lost:
+
+- a static executable reads a null address from it;
+- with -z pack-relative-relocs the dynamic linker adds the load address to
+  zero.
+
+With RELA relative relocations in a dynamic link the damage is hidden,
+because the addend is in the relocation.
+
+Compilers do not use the GOT for local symbols. Hand-written assembly
+does: GMP's arm64 mpn_invert_limb loads the address of its local table
+with adrp :got: / ldr :got_lo12:.
+
+Use bfd_put_NN, as for the entries of global symbols.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+--- a/bfd/elfnn-aarch64.c	2026-11-14 07:46:32.810562901 +0800
++++ b/bfd/elfnn-aarch64.c	2026-11-14 07:46:32.813395736 +0800
+@@ -6243,7 +6243,7 @@
+ 
+ 	if (!symbol_got_offset_mark_p (input_bfd, h, r_symndx))
+ 	  {
+-	    bfd_put_64 (output_bfd, value, base_got->contents + off);
++	    bfd_put_NN (output_bfd, value, base_got->contents + off);
+ 
+ 	    /* For local symbol, we have done absolute relocation in static
+ 	       linking stage.  While for shared library, we need to update the
