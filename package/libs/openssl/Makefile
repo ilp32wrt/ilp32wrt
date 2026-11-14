@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=openssl
 PKG_VERSION:=3.5.9
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_BUILD_FLAGS:=no-mips16 gc-sections no-lto
 
 PKG_BUILD_PARALLEL:=1
@@ -353,6 +353,12 @@ ifdef CONFIG_i386
 endif
 
 OPENSSL_TARGET:=linux-$(call qstrip,$(CONFIG_ARCH))-openwrt
+# AArch64 ILP32: linux-aarch64 assumes a 64-bit long (SIXTY_FOUR_BIT_LONG), which gives a 4-byte
+# BN_ULONG next to an 8-byte BN_BYTES and wrong BIGNUM results (RSA, DH, primes). OpenSSL's own ILP32
+# target uses SIXTY_FOUR_BIT (BN_ULONG = unsigned long long) with the same AArch64 assembly.
+ifeq ($(CONFIG_AARCH64_ABI_ILP32),y)
+  OPENSSL_TARGET:=linux-arm64ilp32
+endif
 
 STAMP_CONFIGURED := $(STAMP_CONFIGURED)_$(shell echo $(OPENSSL_OPTIONS) | $(MKHASH) md5)
 
