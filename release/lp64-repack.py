@@ -141,7 +141,8 @@ while todo:
     n = todo.pop()
     rn = resolve(n)
     if rn is None:
-        print("unresolved:", n); continue
+        # a root that this arch does not have upstream (e.g. the QEMU host side outside armsr) is skipped
+        print("unresolved:", n, "(root, skipped)" if n in ROOTS else ""); cls.pop(n, None); continue
     if rn != n:
         cls.setdefault(n, "alias"); n = rn
     if n not in extracted:
