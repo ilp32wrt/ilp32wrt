@@ -14,8 +14,6 @@ qemu-img
 qemu-nbd
 
 # --- ILP32Wrt .4 (2026-11-15): AArch64 code that assumes LP64; the official LP64 build ships ---
-# fluent-bit: WAMR native call bridge with the LP64 argument layout
-fluent-bit
 # ruby: coroutine/arm64 stores the stack pointer as 8 bytes
 libruby3.4
 ruby
