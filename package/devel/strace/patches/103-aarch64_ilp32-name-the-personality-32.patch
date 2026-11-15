@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Sun, 15 Nov 2026 15:42:00 +0800
+Subject: [PATCH] aarch64_ilp32: name the personality "32"
+
+With a single personality the designator defaults to
+STRINGIFY_VAL(__WORDSIZE), but musl defines __WORDSIZE only in
+<sys/reg.h>, so the designator was the string "__WORDSIZE" and
+qualifications such as -e trace=getcwd@32 were refused.
+
+Found by the test suite: options-syntax, filtering_syscall-syntax and
+trace_personality_{,number_,regex_,statfs_}32.
+---
+ src/linux/aarch64_ilp32/arch_defs_.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/linux/aarch64_ilp32/arch_defs_.h b/src/linux/aarch64_ilp32/arch_defs_.h
+index 3f4d0a1..6beb0d8 100644
+--- a/src/linux/aarch64_ilp32/arch_defs_.h
++++ b/src/linux/aarch64_ilp32/arch_defs_.h
+@@ -10,3 +10,9 @@
+  * Only ILP32 tracees are supported by an ILP32 strace.
+  */
+ #define PERSONALITY0_AUDIT_ARCH { AUDIT_ARCH_AARCH64ILP32, 0 }
++/*
++ * The default designator is STRINGIFY_VAL(__WORDSIZE), but musl defines
++ * __WORDSIZE only in <sys/reg.h>, so it would be the string "__WORDSIZE"
++ * and "-e trace=getcwd@32" would be refused.
++ */
++#define PERSONALITY_DESIGNATORS { "32" }
+-- 
+2.43.0
+
