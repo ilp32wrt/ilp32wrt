@@ -1,4 +1,4 @@
-src-git packages https://github.com/ilp32wrt/packages.git^7fee0195deee5f258a268bb056138796e32878f2
+src-git packages https://github.com/ilp32wrt/packages.git^100c72ed99f51a2dad81cf3c77f949b2a0fe4d12
 src-git luci https://github.com/ilp32wrt/luci.git^9b62b2371041840e7f4de2f54152b385b362f4d4
 src-git routing https://github.com/ilp32wrt/routing.git^9758b5404ccdd2208f0f902948e504b006852d13
 src-git telephony https://github.com/ilp32wrt/telephony.git^2ad509cefb25e61ed06db492ef4d08a2f76039f2
