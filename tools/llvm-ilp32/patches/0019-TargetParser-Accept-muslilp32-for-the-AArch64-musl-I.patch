@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Sun, 15 Nov 2026 13:22:00 +0800
+Subject: [PATCH] [TargetParser] Accept muslilp32 for the AArch64 musl ILP32
+ environment
+
+Parse the environment name muslilp32 as musl_ilp32. Rust's cc crate makes
+the clang triple of a Rust target by dropping the separator, so the target
+aarch64-unknown-linux-musl_ilp32 reaches clang as
+aarch64-unknown-linux-muslilp32, which was parsed as plain musl (LP64).
+The canonical name stays musl_ilp32.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+ llvm/lib/TargetParser/Triple.cpp           |  1 +
+ llvm/unittests/TargetParser/TripleTest.cpp | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/llvm/lib/TargetParser/Triple.cpp b/llvm/lib/TargetParser/Triple.cpp
+index c8273739a..bd4ef910f 100644
+--- a/llvm/lib/TargetParser/Triple.cpp
++++ b/llvm/lib/TargetParser/Triple.cpp
+@@ -786,6 +786,7 @@ static Triple::EnvironmentType parseEnvironment(StringRef EnvironmentName) {
+       .StartsWith("muslsf", Triple::MuslSF)
+       .StartsWith("muslx32", Triple::MuslX32)
+       .StartsWith("musl_ilp32", Triple::MuslILP32)
++      .StartsWith("muslilp32", Triple::MuslILP32)
+       .StartsWith("muslwali", Triple::MuslWALI)
+       .StartsWith("musl", Triple::Musl)
+       .StartsWith("msvc", Triple::MSVC)
+diff --git a/llvm/unittests/TargetParser/TripleTest.cpp b/llvm/unittests/TargetParser/TripleTest.cpp
+index a1ed857d7..ea5bb346d 100644
+--- a/llvm/unittests/TargetParser/TripleTest.cpp
++++ b/llvm/unittests/TargetParser/TripleTest.cpp
+@@ -142,6 +142,18 @@ TEST(TripleTest, ParsedIDs) {
+   EXPECT_EQ(Triple::aarch64_be, T.getArch());
+   EXPECT_EQ(Triple::MuslILP32, T.getEnvironment());
+ 
++  // The same environment without the separator, as Rust's cc crate spells it.
++  T = Triple("aarch64-unknown-linux-muslilp32");
++  EXPECT_EQ(Triple::aarch64, T.getArch());
++  EXPECT_EQ(Triple::Linux, T.getOS());
++  EXPECT_EQ(Triple::MuslILP32, T.getEnvironment());
++  EXPECT_TRUE(T.isILP32Environment());
++  EXPECT_TRUE(T.isAArch64(32));
++  EXPECT_TRUE(T.isMusl());
++  EXPECT_EQ("muslilp32", T.getEnvironmentName());
++  EXPECT_EQ("musl_ilp32",
++            Triple::getEnvironmentTypeName(T.getEnvironment()));
++
+   T = Triple("aarch64-unknown-linux-musl");
+   EXPECT_EQ(Triple::Musl, T.getEnvironment());
+   EXPECT_FALSE(T.isILP32Environment());
+-- 
+2.43.0
+
