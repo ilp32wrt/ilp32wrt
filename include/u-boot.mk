@@ -70,9 +70,12 @@ endef
 
 TARGET_DEP = TARGET_$(BUILD_TARGET)$(if $(BUILD_SUBTARGET),_$(BUILD_SUBTARGET))
 
-# LP64 U-Boot with the ILP32 user-land ABI: the toolchain libgcc is ILP32 only
+# LP64 U-Boot with the ILP32 user-land ABI: the toolchain libgcc is ILP32 only, and the toolchain ld
+# defaults to the aarch64linux32 emulation (binutils patch 600), which U-Boot's direct ld calls must not
+# use for its LP64 objects (ld 2.44 crashes in the stub sizing of the EFI apps)
 UBOOT_LP64_FLAGS = \
-	$(if $(TARGET_LP64_FLAGS),CC="$(TARGET_CROSS)gcc $(TARGET_LP64_FLAGS)" PLATFORM_LIBGCC=)
+	$(if $(TARGET_LP64_FLAGS),CC="$(TARGET_CROSS)gcc $(TARGET_LP64_FLAGS)" PLATFORM_LIBGCC= \
+		LD="$(TARGET_CROSS)ld -m aarch64linux")
 
 UBOOT_MAKE_FLAGS = \
 	PATH=$(STAGING_DIR_HOST)/bin:$(PATH) \
