@@ -14,55 +14,6 @@ qemu-img
 qemu-nbd
 
 # --- ILP32Wrt .4 (2026-11-15): AArch64 code that assumes LP64; the official LP64 build ships ---
-# hev-task-system's context switch reads 8 bytes from a 4-byte stack pointer field
-fsh
-hev-socks5-server
-hev-socks5-tproxy
-hev-socks5-tunnel
-luci-app-natmap
-luci-i18n-natmap-ar
-luci-i18n-natmap-bg
-luci-i18n-natmap-bn
-luci-i18n-natmap-ca
-luci-i18n-natmap-cs
-luci-i18n-natmap-da
-luci-i18n-natmap-de
-luci-i18n-natmap-el
-luci-i18n-natmap-es
-luci-i18n-natmap-fi
-luci-i18n-natmap-fr
-luci-i18n-natmap-ga
-luci-i18n-natmap-he
-luci-i18n-natmap-hi
-luci-i18n-natmap-hu
-luci-i18n-natmap-it
-luci-i18n-natmap-ja
-luci-i18n-natmap-ko
-luci-i18n-natmap-lo
-luci-i18n-natmap-lt
-luci-i18n-natmap-mr
-luci-i18n-natmap-ms
-luci-i18n-natmap-nl
-luci-i18n-natmap-no
-luci-i18n-natmap-pl
-luci-i18n-natmap-pt
-luci-i18n-natmap-pt-br
-luci-i18n-natmap-ro
-luci-i18n-natmap-ru
-luci-i18n-natmap-sk
-luci-i18n-natmap-sv
-luci-i18n-natmap-ta
-luci-i18n-natmap-tr
-luci-i18n-natmap-uk
-luci-i18n-natmap-vi
-luci-i18n-natmap-yua
-luci-i18n-natmap-zh-cn
-luci-i18n-natmap-zh-tw
-natmap
-# haproxy: double-word CAS on 2 x 8 bytes
-halog
-haproxy
-haproxy-nossl
 # fluent-bit: WAMR native call bridge with the LP64 argument layout
 fluent-bit
 # ruby: coroutine/arm64 stores the stack pointer as 8 bytes
