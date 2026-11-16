@@ -376,10 +376,13 @@ EOF
 		}
 	}
 
+	# ILP32Wrt: one AArch64 ILP32 package architecture for every target (aarch64_generic_ilp32); the kernels
+	# stay per target. The first matching default wins, so these come before the per-target ones.
 	print <<EOF;
 
 config TARGET_ARCH_PACKAGES
 	string
+	default "aarch64_generic" if AARCH64_ABI_ILP32 && aarch64
 	
 EOF
 	foreach my $target (@target) {
@@ -390,6 +393,7 @@ EOF
 
 config DEFAULT_TARGET_OPTIMIZATION
 	string
+	default "-Os -pipe -mcpu=generic" if AARCH64_ABI_ILP32 && aarch64
 EOF
 	foreach my $target (@target) {
 		next if @{$target->{subtargets}} > 0;
@@ -400,6 +404,7 @@ EOF
 
 config CPU_TYPE
 	string
+	default "generic" if AARCH64_ABI_ILP32 && aarch64
 EOF
 	foreach my $target (@target) {
 		next if @{$target->{subtargets}} > 0;
