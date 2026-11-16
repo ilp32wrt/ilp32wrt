@@ -58,8 +58,8 @@ make menuconfig
 - Toolchain: `aarch64-openwrt-linux-musl_ilp32`, GCC 14.3.0 `--with-abi=ilp32`, musl 1.2.5 with the
   `aarch64_ilp32` port (`toolchain/musl/patches/910`–`914`, from
   [ilp32-a64/musl-ilp32](https://github.com/ilp32-a64/musl-ilp32)). musl only; glibc is not supported.
-- Packages get an `_ilp32` architecture suffix (e.g. `aarch64_cortex-a53_ilp32`), so ILP32 and LP64
-  packages never mix.
+- One package architecture for every target, `aarch64_generic_ilp32` (`-mcpu=generic`; the kernels stay
+  per target): all targets share one package set, and ILP32 and LP64 packages never mix.
 - Kernel: `target/linux/generic/hack-6.12/370-*`, the 46 commits of
   [ilp32-a64/linux-ilp32](https://github.com/ilp32-a64/linux-ilp32) branch `ilp32-6.12.y`. The ILP32 ABI
   selects `ARM64_ILP32` and `COMPAT_32BIT_TIME`, and the build stops if either is lost from the kernel

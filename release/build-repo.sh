@@ -10,7 +10,9 @@
 # Usage: build-repo.sh <out> <version> <openwrt tree> <bin dir>...
 #   openwrt tree: for staging_dir/host/bin/{apk,fakeroot}
 #   bin dir:      the bin/ of one release build (several targets may share an arch; identical files are
-#                 merged, a different file with the same name stops the script)
+#                 merged, a different file with the same name stops the script); targets:<bin dir> takes only
+#                 its bin/targets (kernel, kmods, target packages): for the targets whose shared feed packages
+#                 come from another build of the same package architecture (one aarch64_generic_ilp32 set)
 # Environment: LP64_PACKAGES (default: lp64-packages.txt next to this script; empty file or "none" = no LP64
 #              packages), LP64_WORK (work directory for lp64-repack.py, default <out>/../lp64-work)
 set -eu
@@ -37,9 +39,11 @@ put() {
 }
 
 for bin in "$@"; do
-	[ -d "$bin/packages" ] && [ -d "$bin/targets" ] || die "$bin is not a bin/ directory"
+	only_targets=
+	case $bin in targets:*) bin=${bin#targets:}; only_targets=1 ;; esac
+	[ -d "$bin/targets" ] && { [ -n "$only_targets" ] || [ -d "$bin/packages" ]; } || die "$bin is not a bin/ directory"
 	# shared feeds: bin/packages/<arch>/<feed>/*.apk
-	for d in "$bin"/packages/*/*/; do
+	[ -n "$only_targets" ] || for d in "$bin"/packages/*/*/; do
 		arch=$(basename "$(dirname "$d")"); feed=$(basename "$d")
 		for f in "$d"*.apk; do [ -e "$f" ] && put "$f" "$SHARED/$arch/$feed"; done
 	done
