@@ -72,9 +72,6 @@ php8-pecl-raphf
 php8-pecl-redis
 php8-pecl-xdebug
 zabbix-frontend-server
-# Rust: ring asserts 8-byte pointers (dufs, librespeed-cli-rust)
-dufs
-librespeed-cli-rust
 # Go compiler (needs cgo; Go programs are static LP64 anyway)
 golang1.26
 golang1.26-doc
