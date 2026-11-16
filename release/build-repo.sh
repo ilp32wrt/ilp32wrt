@@ -75,6 +75,8 @@ lp64_map() { # <ilp32 arch> -> "<official arch> <official target>"
 	*) echo "" ;;
 	esac
 }
+# package name from an apk file name <name>-<version>.apk: a version has no "-" except an optional -r<n>,
+# a name may have digits after a "-" (libpcre2-16), and many versions have no -r<n> (luci-*, ucode-mod-html)
 roots=$( [ -s "$LP64_PACKAGES" ] && grep -vE '^\s*(#|$)' "$LP64_PACKAGES" | tr '\n' ' ' || true)
 if [ -n "$roots" ] && [ "$roots" != "none " ]; then
 	for ad in "$SHARED"/*/; do
@@ -82,14 +84,14 @@ if [ -n "$roots" ] && [ "$roots" != "none " ]; then
 		[ -n "$m" ] || { echo "build-repo: no LP64 mapping for $arch, skipped"; continue; }
 		set -- $m
 		names=$LP64_WORK/$arch.names; mkdir -p "$LP64_WORK"
-		find "$ad" "$REL"/targets -name '*.apk' -printf '%f\n' | sed -E 's/-[0-9][^-]*-r[0-9]+\.apk$//; s/^/x\t/' > "$names"
+		find "$ad" "$REL"/targets -name '*.apk' -printf '%f\n' | sed -E 's/^(.*)-[0-9][^-]*(-r[0-9]+)?\.apk$/\1/; s/^/x\t/' > "$names"
 		ILP32_NAMES=$names UPSTREAM_VERSION=$UPSTREAM "$FAKEROOT" -- python3 -I "$HERE/lp64-repack.py" "$APK" \
 			"$LP64_WORK/out-$arch" "$LP64_WORK" "$arch" "$1" "$2" -- $roots > "$LP64_WORK/$arch.log" 2>&1 ||
 			die "lp64-repack.py failed for $arch (see $LP64_WORK/$arch.log)"
 		grep -E 'rc=[^0]' "$LP64_WORK/$arch.log" && die "mkpkg failed for $arch (see $LP64_WORK/$arch.log)"
 		for f in "$LP64_WORK/out-$arch"/*.apk; do
 			[ -e "$f" ] || continue
-			n=$(basename "$f" | sed -E 's/-[0-9][^-]*-r[0-9]+\.apk$//')
+			n=$(basename "$f" | sed -E 's/^(.*)-[0-9][^-]*(-r[0-9]+)?\.apk$/\1/')
 			ls "$SHARED/$arch"/*/"$n"-[0-9]*.apk >/dev/null 2>&1 && die "LP64 package $n is also an ILP32 package ($arch)"
 			put "$f" "$SHARED/$arch/packages"
 		done
