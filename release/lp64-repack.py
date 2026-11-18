@@ -79,6 +79,10 @@ for n, p in index.items():
     for pr in p["provides"]:
         providers.setdefault(re.split(r"[<>=~]", pr)[0], n)
 
+# Lua C modules of the official build link the PUC Lua library (NEEDED liblua.so.5.1.5) but depend only on
+# "lua": their LP64 conversion also needs the LP64 library
+LUA_EXTRA = {"lua": "liblua5.1.5"}
+
 def dep_name(d):
     return re.split(r"[<>=~]", d.lstrip("!"))[0]
 
@@ -159,8 +163,9 @@ while todo:
         dn = dep_name(d)
         if d.startswith("!") or not dn:
             continue
-        if dn not in cls and resolve(dn) not in cls:
-            todo.append(dn)
+        for x in [dn] + ([LUA_EXTRA[dn]] if cls[n] == "lua" and dn in LUA_EXTRA else []):
+            if x not in cls and resolve(x) not in cls:
+                todo.append(x)
 
 def newname(n):
     n = resolve(n) or n
@@ -237,6 +242,8 @@ for n, c in sorted(cls.items()):
         if d.startswith("!") or not dn:
             continue
         deps.append(newname(dn))
+        if c == "lua" and dn in LUA_EXTRA:
+            deps.append(newname(LUA_EXTRA[dn]))
     if c == "app" and "libc-lp64" not in deps:
         deps.append("libc-lp64")
     args = [APK, "mkpkg", "--info", f"name:{new}", "--info", f"version:{p['version']}",
