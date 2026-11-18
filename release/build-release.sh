@@ -6,7 +6,8 @@
 #
 # Usage: build-release.sh <openwrt tree> <version> <output directory> [<target>]
 #   version: e.g. 25.12.6-ilp32.1 (CONFIG_VERSION_NUMBER; the tag is v<version>)
-#   target:  armsr-armv8 (default), mediatek-filogic, bcm27xx-bcm2710/2711/2712: the seed in config/
+#   target:  armsr-armv8 (default), mediatek-filogic, bcm27xx-bcm2710/2711/2712, or another AArch64
+#            <board>-<subtarget> with all its devices (e.g. mvebu-cortexa53): the seed in config/
 # Environment: JOBS (default: nproc), TESTS (checkout of ilp32wrt/tests; needed for armsr-armv8, which
 #              also builds the test programs for the QEMU checks), EXTRA_PATTERNS (file with more extended
 #              regexps that must not appear in the public files, one per line; kept out of the repository)
@@ -47,6 +48,10 @@ bcm27xx-bcm2711)
 bcm27xx-bcm2712)
 	BOARD=bcm27xx SUBTARGET=bcm2712
 	FILES='*-rpi-5-*' ;;
+bcm4908-generic|imx-cortexa53|layerscape-armv8_64b|mediatek-mt7622|microchipsw-lan969x|mvebu-cortexa53|mvebu-cortexa72|qualcommax-ipq807x|qualcommax-ipq60xx|qualcommax-ipq50xx|rockchip-armv8|sunxi-cortexa53)
+	# every device of the target (CONFIG_TARGET_ALL_PROFILES), as in the official builds: all image files
+	BOARD=${TARGET%%-*} SUBTARGET=${TARGET#*-}
+	FILES=all ;;
 *) echo "unknown target: $TARGET" >&2; exit 1 ;;
 esac
 
@@ -114,7 +119,12 @@ log "collect"
 for d in ${DEVICES:-}; do
 	ls "$BIN"/*-"$d"-squashfs-sysupgrade.* > /dev/null 2>&1 || { echo "no sysupgrade image for $d" >&2; exit 1; }
 done
-(cd "$BIN" && cp $FILES *.manifest "$R/")
+if [ "$FILES" = all ]; then
+	(cd "$BIN" && find . -maxdepth 1 -type f ! -name '*.buildinfo' ! -name 'sha256sums*' ! -name '*.json' \
+		-exec cp {} "$R/" +)
+else
+	(cd "$BIN" && cp $FILES *.manifest "$R/")
+fi
 for f in config feeds version; do cp "$BIN/$f.buildinfo" "$R/$TARGET-$f.buildinfo"; done
 (cd "$R" && ls | grep -v -e '^sha256sums' -e 'public-info' | xargs sha256sum -- > "sha256sums-$TARGET")
 
