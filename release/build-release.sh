@@ -112,6 +112,14 @@ if ! make -j"$JOBS" IGNORE_ERRORS=1 > "$OUT/build.log" 2>&1; then
 fi
 
 BIN=bin/targets/$BOARD/$SUBTARGET-ilp32
+# the image kernel must be the one the kmods of the package repository were built for
+VM=$(awk -v t="$TARGET" '$1 == t { print $2 }' "$HERE/vermagic.txt")
+[ -n "$VM" ] || { echo "no vermagic for $TARGET in vermagic.txt" >&2; exit 1; }
+KAPK=$(ls "$BIN"/packages/kernel-*.apk 2>/dev/null | head -1)
+case ${KAPK##*/} in
+*~"$VM"-r*.apk) log "kernel vermagic $VM, as in the package repository" ;;
+*) echo "kernel ${KAPK##*/} does not have the repository vermagic $VM" >&2; exit 1 ;;
+esac
 R=$OUT/release
 mkdir -p "$R"
 log "collect"

@@ -1,6 +1,7 @@
 name: Release
 
-# Build, test and draft an ILP32Wrt release (armsr/armv8, devices of mediatek/filogic, Raspberry Pi 3-5).
+# Build, test and draft an ILP32Wrt release (the AArch64 targets of release/config/: armsr/armv8, the devices of
+# mediatek/filogic, Raspberry Pi 3-5, and all devices of the other AArch64 targets).
 # Manual only. Each target is built in its own job; the QEMU checks run on armsr/armv8. Two human gates: the release
 # job waits for approval in the "release" environment, and the Release it creates is a draft that is
 # published by hand.
@@ -33,7 +34,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [armsr-armv8, mediatek-filogic, bcm27xx-bcm2710, bcm27xx-bcm2711, bcm27xx-bcm2712]
+        target: [armsr-armv8, mediatek-filogic, bcm27xx-bcm2710, bcm27xx-bcm2711, bcm27xx-bcm2712,
+                 bcm4908-generic, imx-cortexa53, layerscape-armv8_64b, mediatek-mt7622, microchipsw-lan969x, mvebu-cortexa53,
+                 mvebu-cortexa72, qualcommax-ipq807x, qualcommax-ipq60xx, qualcommax-ipq50xx, rockchip-armv8, sunxi-cortexa53]
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
