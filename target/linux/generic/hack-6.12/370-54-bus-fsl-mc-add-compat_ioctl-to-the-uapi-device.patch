@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Date: Thu, 19 Nov 2026 20:45:27 +0800
+Subject: [PATCH] bus: fsl-mc: add compat_ioctl to the uapi device
+
+fsl_mc_uapi_dev_fops has no .compat_ioctl, so FSL_MC_SEND_MC_COMMAND
+from a compat task (AArch32 or ILP32) fails with ENOTTY. The command
+takes a pointer to struct fsl_mc_command, a u64 header and seven u64
+parameters with the same layout for every ABI, so compat_ptr_ioctl() is
+enough.
+
+Signed-off-by: liviyifan <344781483+liviyifan@users.noreply.github.com>
+---
+ drivers/bus/fsl-mc/fsl-mc-uapi.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/bus/fsl-mc/fsl-mc-uapi.c b/drivers/bus/fsl-mc/fsl-mc-uapi.c
+index a376ec661653..d94c60d32086 100644
+--- a/drivers/bus/fsl-mc/fsl-mc-uapi.c
++++ b/drivers/bus/fsl-mc/fsl-mc-uapi.c
+@@ -568,6 +568,7 @@ static const struct file_operations fsl_mc_uapi_dev_fops = {
+ 	.open = fsl_mc_uapi_dev_open,
+ 	.release = fsl_mc_uapi_dev_release,
+ 	.unlocked_ioctl = fsl_mc_uapi_dev_ioctl,
++	.compat_ioctl = compat_ptr_ioctl,
+ };
+ 
+ int fsl_mc_uapi_create_device_file(struct fsl_mc_bus *mc_bus)
+-- 
+2.43.0
+
