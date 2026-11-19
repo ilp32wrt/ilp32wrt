@@ -1,0 +1,95 @@
+From: liviyifan <344781483+liviyifan@users.noreply.github.com>
+Subject: restool: 64-bit field masks and printf formats on ILP32
+
+GENMASK() is computed in unsigned long but assumes 64 bits: on ILP32 every
+field mask of the MC commands is wrong. Compute it in unsigned long long.
+
+Print the 64-bit counters and time_t with %llu/%lld and a cast: uint64_t
+and time_t are long long on ILP32, so the %lu/%ld formats are wrong there
+(and fail the -Werror build).
+
+diff --git a/dpdmux_commands.c b/dpdmux_commands.c
+index 8e694ae..59c3723 100644
+--- a/dpdmux_commands.c
++++ b/dpdmux_commands.c
+@@ -377,7 +377,8 @@ static int print_dpdmux_endpoint(uint32_t target_id, uint16_t num_ifs,
+ 		for (uint32_t i = 0; i < ARRAY_SIZE(dpdmux_counters); ++i) {
+ 			dpdmux_if_get_counter(&restool.mc_io, 0,
+ 					token, k, i, &count);
+-			printf("\t%s: %lu\n", dpdmux_counters[i], count);
++			printf("\t%s: %llu\n", dpdmux_counters[i],
++			       (unsigned long long)count);
+ 		}
+ 	}
+ 	return 0;
+diff --git a/dpmac_commands.c b/dpmac_commands.c
+index 3b300cb..4cb85c5 100644
+--- a/dpmac_commands.c
++++ b/dpmac_commands.c
+@@ -327,7 +327,8 @@ static int print_dpmac_counters(struct fsl_mc_io *mc_io, uint16_t token)
+ 			return error;
+ 		}
+ 
+-		printf("%s: %lu\n", dpaa2_mac_counters[i].name, counter_value);
++		printf("%s: %llu\n", dpaa2_mac_counters[i].name,
++		       (unsigned long long)counter_value);
+ 	}
+ 
+ 	return 0;
+diff --git a/dpni_commands.c b/dpni_commands.c
+index bfb5f6a..badfe8a 100644
+--- a/dpni_commands.c
++++ b/dpni_commands.c
+@@ -829,7 +829,7 @@ static void dpni_print_stats(const char *strings[],
+ 	for (i = 0; i < DPNI_STATS_PER_PAGE_V10; i++) {
+ 		if (strcmp(strings[i], "\0") == 0)
+ 			break;
+-		printf("%s: %lu\n", strings[i], *stat);
++		printf("%s: %llu\n", strings[i], (unsigned long long)*stat);
+ 		stat++;
+ 	}
+ }
+diff --git a/dpsw_commands.c b/dpsw_commands.c
+index b9c0929..3657085 100644
+--- a/dpsw_commands.c
++++ b/dpsw_commands.c
+@@ -467,9 +467,9 @@ static int print_dpsw_endpoint(uint32_t target_id, uint16_t num_ifs,
+ 			if (error)
+ 				return error;
+ 
+-			printf("\t%s: %ld\n",
++			printf("\t%s: %llu\n",
+ 				dpsw_counter_stats[counter_iterator],
+-				counter);
++				(unsigned long long)counter);
+ 		}
+ 	}
+ 	return 0;
+diff --git a/mc_v10/fsl_mc_cmd.h b/mc_v10/fsl_mc_cmd.h
+index dccc2f0..b102b3e 100644
+--- a/mc_v10/fsl_mc_cmd.h
++++ b/mc_v10/fsl_mc_cmd.h
+@@ -53,7 +53,7 @@
+ 
+ #define BITS_PER_LONG			64
+ #define GENMASK(h, l) \
+-		(((~0UL) << (l)) & (~0UL >> (BITS_PER_LONG - 1 - (h))))
++		(((~0ULL) << (l)) & (~0ULL >> (BITS_PER_LONG - 1 - (h))))
+ 
+ struct mc_cmd_header {
+ 	union {
+diff --git a/restool.c b/restool.c
+index 6de219b..989fb26 100644
+--- a/restool.c
++++ b/restool.c
+@@ -1179,8 +1179,8 @@ static int parse_obj_command(const char *obj_type,
+ 
+ 	clock_gettime(CLOCK_REALTIME, &end_time);
+ 	diff_time(&start_time, &end_time, &latency);
+-	DEBUG_PRINTF("It takes %ld.%ld seconds to run command\n",
+-		latency.tv_sec, latency.tv_nsec);
++	DEBUG_PRINTF("It takes %lld.%ld seconds to run command\n",
++		(long long)latency.tv_sec, latency.tv_nsec);
+ 
+ 	if (error < 0)
+ 		goto out;
