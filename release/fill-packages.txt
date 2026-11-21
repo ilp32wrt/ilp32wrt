@@ -1,0 +1,79 @@
+# Target packages that the targets built before the seeds selected them (main d2d0c1b954) lack: build-repo.sh
+# copies them in from a target that built them. Names are apk package names (with the ABI version).
+# Class: none = same file in every target; any = the builds differ only in the build path; nand = depends on
+# NAND_SUPPORT (see build-repo.sh). Checked against the builds of 11-21 (cmp6e: all other files identical).
+arptables-nft
+ebtables-nft
+ip6tables-extra
+ip6tables-mod-nat
+ip6tables-nft
+ip6tables-zz-legacy
+iptables-mod-checksum
+iptables-mod-cluster
+iptables-mod-conntrack-extra
+iptables-mod-extra
+iptables-mod-filter
+iptables-mod-hashlimit
+iptables-mod-ipopt
+iptables-mod-iprange
+iptables-mod-ipsec
+iptables-mod-led
+iptables-mod-nat-extra
+iptables-mod-nflog
+iptables-mod-nfqueue
+iptables-mod-physdev
+iptables-mod-rpfilter
+iptables-mod-socket
+iptables-mod-tee
+iptables-mod-tproxy
+iptables-mod-trace
+iptables-mod-u32
+iptables-nft
+iptables-zz-legacy
+xtables-legacy
+xtables-nft
+libip4tc2
+libip6tc2
+libiptext0
+libiptext-nft0
+libiptext6-0
+atm-aread
+atm-atmaddr
+atm-atmdiag
+atm-atmdump
+atm-atmloop
+atm-atmsigd
+atm-atmswitch
+atm-atmtcp
+atm-awrite
+atm-bus
+atm-debug-tools
+atm-diagnostics
+atm-esi
+atm-ilmid
+atm-ilmidiag
+atm-lecs
+atm-les
+atm-mpcd
+atm-saaldump
+atm-sonetdiag
+atm-svc_recv
+atm-svc_send
+atm-tools
+atm-ttcp_atm
+atm-zeppelin
+br2684ctl
+linux-atm
+blockd
+snapshot-tool
+comgt
+comgt-directip
+comgt-ncm
+dropbearconvert
+jool-tools-netfilter
+umbim
+uqmi
+libatomic1
+libstdcpp6 any
+qosify any
+block-mount nand

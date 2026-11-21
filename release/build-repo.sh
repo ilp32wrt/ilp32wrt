@@ -13,7 +13,8 @@
 #                 merged, a different file with the same name stops the script); targets:<bin dir> takes only
 #                 its bin/targets (kernel, kmods, target packages): for the targets whose shared feed packages
 #                 come from another build of the same package architecture (one aarch64_generic_ilp32 set)
-# Environment: LP64_PACKAGES (default: lp64-packages.txt next to this script; empty file or "none" = no LP64
+# Environment: FILL_PACKAGES (default: fill-packages.txt next to this script, "none" = no fill step),
+#              LP64_PACKAGES (default: lp64-packages.txt next to this script; empty file or "none" = no LP64
 #              packages), LP64_WORK (work directory for lp64-repack.py, default <out>/../lp64-work)
 set -eu
 OUT=$1; VERSION=$2; TREE=$3; shift 3
@@ -67,6 +68,65 @@ for bin in "$@"; do
 		done
 	done
 done
+
+# fill: target packages that the targets built before the seeds selected them (FILL_PACKAGES, one name per line,
+# optional class): copied into every target that lacks them, from a target that built them
+#   (no class)  every target that built it has the same file as armsr; copied from armsr
+#   any         the builds differ only in the build path (BTF, placeholder strings); copied from armsr
+#   nand        the build depends on NAND_SUPPORT (FEATURES nand of the target): copied from armsr into the targets
+#               without nand, from the nand targets (which must all have the same file) into the nand targets
+FILL_PACKAGES=${FILL_PACKAGES:-$HERE/fill-packages.txt}
+has_nand() { # <target> <subtarget>
+	local mk=$TREE/target/linux/$1/Makefile smk=$TREE/target/linux/$1/$2/target.mk
+	[ -e "$mk" ] || die "fill: no $mk"
+	# a FEATURES:= in the subtarget replaces the target's list
+	if [ -e "$smk" ] && grep -qE '^[[:space:]]*FEATURES[[:space:]]*:=' "$smk"; then mk=$smk; else mk="$mk $smk"; fi
+	grep -hE '^[[:space:]]*FEATURES[[:space:]]*[:+]?=' $mk 2>/dev/null | grep -qw nand
+}
+pkg_in() { ls "$1/$2"-[0-9]*.apk 2>/dev/null | grep -E "/$2-[0-9][^-]*(-r[0-9]+)?\.apk\$" || true; }
+if [ -s "$FILL_PACKAGES" ] && [ "$(cat "$FILL_PACKAGES")" != none ]; then
+	ref=$REL/targets/armsr/armv8/packages
+	[ -d "$ref" ] || die "fill: no armsr/armv8 target packages"
+	tdirs=$(ls -d "$REL"/targets/*/*/packages)
+	declare -A nand
+	for d in $tdirs; do
+		s=$(basename "$(dirname "$d")"); t=$(basename "$(dirname "$(dirname "$d")")")
+		if has_nand "$t" "$s"; then nand[$d]=1; else nand[$d]=0; fi
+		echo "build-repo: fill: $t/$s nand=${nand[$d]}"
+	done
+	nfill=0
+	while read -r n class; do
+		case $n in ''|'#'*) continue ;; esac
+		a=$(pkg_in "$ref" "$n"); [ -n "$a" ] || die "fill: $n is not in armsr"
+		[ "$(echo "$a" | wc -l)" = 1 ] || die "fill: several $n in armsr"
+		missing= built_nand=
+		for d in $tdirs; do
+			f=$(pkg_in "$d" "$n")
+			if [ -z "$f" ]; then missing="$missing $d"; continue; fi
+			[ "$(echo "$f" | wc -l)" = 1 ] || die "fill: several $n in $d"
+			case $class in
+			any) ;;
+			nand) if [ "${nand[$d]}" = 1 ]; then
+					[ -z "$built_nand" ] && built_nand=$f
+					cmp -s "$f" "$built_nand" || die "fill: $n differs between the nand targets ($f, $built_nand)"
+				else
+					cmp -s "$f" "$a" || die "fill: $n of $d differs from armsr"
+				fi ;;
+			'') cmp -s "$f" "$a" || die "fill: $n of $d differs from armsr" ;;
+			*) die "fill: unknown class $class for $n" ;;
+			esac
+		done
+		for d in $missing; do
+			src=$a
+			if [ "$class" = nand ] && [ "${nand[$d]}" = 1 ]; then
+				[ -n "$built_nand" ] || die "fill: $n: no nand target built it"
+				src=$built_nand
+			fi
+			put "$src" "$d"; nfill=$((nfill + 1))
+		done
+	done < "$FILL_PACKAGES"
+	echo "build-repo: fill: $nfill target packages copied"
+fi
 
 # LP64 packages from the official release of the same upstream version, one run per package arch
 UPSTREAM=${VERSION%%-ilp32*}

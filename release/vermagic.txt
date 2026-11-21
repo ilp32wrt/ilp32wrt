@@ -3,8 +3,19 @@
 # has another one: the image would not accept the repository's kmods. Updated when the repository is built.
 # <target> <vermagic>
 armsr-armv8 716205cd30343718414815c9cc3233c3
-mediatek-filogic aaf79d5b602464d5dde366500529eb08
 bcm27xx-bcm2710 8d0568f54b8b6ad096c85e1f871eccf3
 bcm27xx-bcm2711 7faf72497d5f88593549153b2e4b7179
 bcm27xx-bcm2712 11c9b07ad639ccd04d47b06a8f2f23d7
+bcm4908-generic 24708c6b7c144479015a0621f64658db
+imx-cortexa53 8942706b6cca7d759026b19c2491b342
+layerscape-armv8_64b 13bfa3884eb665b5304ec86d1ec61cb6
+mediatek-filogic aaf79d5b602464d5dde366500529eb08
+mediatek-mt7622 9057af29b0421051c02d3f1e5d14c992
+microchipsw-lan969x 4844b13fec118facdede05cf8f7cfc88
 mvebu-cortexa53 c502c2e32ef2848c173bd2de75bfb9ea
+mvebu-cortexa72 fcc5cadf38fa3ff3427e24df1a42a4ba
+qualcommax-ipq50xx dfd8b2096f2da825dff000cadef45029
+qualcommax-ipq60xx 762de4d82353f8bbc08e7593fc82c5e7
+qualcommax-ipq807x 110c60219d12f75248ab93743c591065
+rockchip-armv8 4c81b0f478c2e14fd1d8b113bb123258
+sunxi-cortexa53 33c89163a597e811c3481fb9a79bcaff
