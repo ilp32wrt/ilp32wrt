@@ -10,7 +10,7 @@ Software Freedom Conservancy (SFC). See [openwrt.org](https://openwrt.org/).
 Routing, netfilter and Wi-Fi run in the kernel, which stays LP64, so forwarding is not affected. Only the
 programs (fw4, LuCI, dnsmasq, hostapd, ...) are ILP32.
 
-Images: [Releases](https://github.com/ilp32wrt/ilp32wrt/releases) (pre-releases, experimental).
+Images: [Releases](https://github.com/ilp32wrt/ilp32wrt/releases).
 Discussion: [Discussions](https://github.com/ilp32wrt/ilp32wrt/discussions).
 
 ## Measured on hardware

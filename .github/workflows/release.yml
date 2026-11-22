@@ -224,7 +224,7 @@ jobs:
         run: |
           set -eu
           TAG=v$VERSION
-          TITLE="ILP32Wrt $VERSION (experimental)"
+          TITLE="ILP32Wrt $VERSION"
           # one sha256sums for all targets; the per-target lists and public-info files are not published
           cd release
           for s in sha256sums-*; do sha256sum -c "$s"; done
@@ -235,6 +235,6 @@ jobs:
           obj=$(gh api "repos/$REPO/git/tags" -f tag="$TAG" -f message="$TITLE" -f object="$COMMIT" \
                 -f type=commit --jq .sha)
           gh api "repos/$REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$obj" > /dev/null
-          gh release create "$TAG" --repo "$REPO" --verify-tag --draft --prerelease --title "$TITLE" \
+          gh release create "$TAG" --repo "$REPO" --verify-tag --draft --title "$TITLE" \
             --notes "Release notes to follow. Commit $COMMIT." \
             release/*
