@@ -64,14 +64,15 @@ jobs:
           df -h /
 
       - name: Install the build packages
-        # OpenWrt 25.12 build prerequisites on Ubuntu 24.04, plus bc, cpio, libelf-dev, quilt and zstd
+        # OpenWrt 25.12 build prerequisites on Ubuntu 24.04, plus bc, cpio, libelf-dev, quilt and zstd;
+        # python3-pyelftools for the rockchip boot loaders
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             bc bison build-essential bzip2 ca-certificates clang cpio curl file \
             flex g++ g++-multilib gawk gcc-multilib gettext git gzip \
             libelf-dev libncurses-dev libssl-dev patch perl \
-            python3 python3-dev python3-setuptools quilt rsync swig time \
+            python3 python3-dev python3-pyelftools python3-setuptools quilt rsync swig time \
             unzip wget xz-utils zlib1g-dev zstd > /dev/null
 
       - name: Check out ilp32wrt

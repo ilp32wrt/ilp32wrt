@@ -129,7 +129,7 @@ for d in ${DEVICES:-}; do
 done
 if [ "$FILES" = all ]; then
 	(cd "$BIN" && find . -maxdepth 1 -type f ! -name '*.buildinfo' ! -name 'sha256sums*' ! -name '*.json' \
-		-exec cp {} "$R/" +)
+		-exec cp -t "$R/" {} +)
 else
 	(cd "$BIN" && cp $FILES *.manifest "$R/")
 fi
