@@ -87,9 +87,22 @@ make menuconfig
   same memory. It is not in the release images.
 - Compiling every package with clang is possible, but not tested.
 
+## Package repository
+
+From v25.12.6-ilp32.4 the release images use the ILP32Wrt package repository, signed with the release key
+(`/etc/apk/keys/ilp32wrt-apk.pem`), so `apk update` and `apk add` work as on official *OpenWrt*:
+
+- `https://downloads.ilp32.org/ilp32wrt/releases/packages-25.12/aarch64_generic_ilp32/`: the shared feeds
+  (base, luci, packages, routing, telephony, video), one package architecture for all targets;
+- `https://downloads.ilp32.org/ilp32wrt/releases/<version>/targets/<target>/<subtarget>/packages/`: the kernel
+  modules and target packages of each release.
+
+Packages that do not work as ILP32 are in the repository as the official LP64 build, repacked with their
+libraries in `/usr/lib/lp64` (`release/lp64-packages.txt`).
+
 ## Official LP64 packages: apk-lp64
 
-There is no ILP32Wrt package repository. The kernel also runs LP64 programs, so `apk-lp64` installs
+The kernel also runs LP64 programs, so for packages that are not in the repository `apk-lp64` installs
 packages of the official *OpenWrt* release (e.g. `aarch64_cortex-a53`) into `/opt/lp64`, with its own apk
 database, and runs them through the LP64 musl loader:
 
@@ -130,3 +143,11 @@ On the *OpenWrt* One, the ucode test suite (178/179; the one failure is a musl r
 
 ILP32Wrt is based on *OpenWrt* and is not affiliated with *OpenWrt*. *OpenWrt* is a registered trademark owned by
 Software Freedom Conservancy (SFC).
+
+ILP32Wrt is provided "as is", without warranty of any kind, to the extent permitted by applicable law (see
+sections 11 and 12 of the GPL-2.0). Flashing firmware can make a device unbootable, may void its warranty and may
+erase its settings; keep a way to recover the device. The packages in the package feeds are maintained by their
+upstream projects, with ILP32 changes by ILP32Wrt; users are responsible for using them in line with local law.
+The build sources of every image and package (the *OpenWrt* tree with the ILP32 changes, the package feeds and
+the release scripts) are at [github.com/ilp32wrt](https://github.com/ilp32wrt); the LP64 packages repacked from
+the official *OpenWrt* release are built from *OpenWrt*'s sources.
